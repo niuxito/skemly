@@ -1,0 +1,28 @@
+vibe: cyberpunk
+layout: TD
+
+// RAG (Retrieval-Augmented Generation) pipeline
+
+[user|User Query] -> [embed1|Query Embedder]
+
+group "Retrieval" #info {
+  [embed1|Query Embedder] -> (vectordb|Vector DB)
+  (vectordb|Vector DB) -> "top-k" -> [rerank|Re-ranker]
+  [rerank|Re-ranker] -> [context|Context Builder]
+}
+
+group "Generation" #safe {
+  [context|Context Builder] -> [prompt|Prompt Template]
+  [user|User Query] -> [prompt|Prompt Template]
+  [prompt|Prompt Template] -> <llm|LLM API>
+  <llm|LLM API> -> ?quality|Answer Quality??
+}
+
+?quality|Answer Quality?? -> "low" -> [fallback|Fallback Response]#warning
+?quality|Answer Quality?? -> "ok" -> [response|Final Response]#safe
+
+group "Indexing Pipeline" #warning {
+  <docs|Document Sources> -> [chunker|Chunker]
+  [chunker|Chunker] -> [embed2|Doc Embedder]
+  [embed2|Doc Embedder] -> (vectordb|Vector DB)
+}

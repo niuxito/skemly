@@ -1,0 +1,27 @@
+vibe: handdrawn
+layout: TD
+
+// E-commerce order lifecycle — from cart to delivery
+
+[customer|Customer] -> [cart|Shopping Cart]
+[cart|Shopping Cart] -> "checkout" -> [checkout|Checkout]
+[checkout|Checkout] -> ?stock|Items In Stock??
+
+?stock|Items In Stock?? -> "no" -> [waitlist|Waitlist]#warning
+?stock|Items In Stock?? -> "yes" -> [payment|Payment]
+
+[payment|Payment] -> ?paid|Payment OK??
+?paid|Payment OK?? -> "no" -> [failed|Payment Failed]#danger
+?paid|Payment OK?? -> "yes" -> [confirm|Order Confirmed]#safe
+
+group "Fulfillment" #safe {
+  [confirm|Order Confirmed] -> [warehouse|Warehouse Pick]
+  [warehouse|Warehouse Pick] -> [pack|Pack & Label]
+  [pack|Pack & Label] -> [ship|Ship Order]
+}
+
+[ship|Ship Order] -> ?delivered|Delivered??
+?delivered|Delivered?? -> "yes" -> [done|Order Complete]#safe
+?delivered|Delivered?? -> "no" -> [incident|Delivery Incident]#danger
+[incident|Delivery Incident] -> [reship|Re-ship]
+[reship|Re-ship] -> [ship|Ship Order]

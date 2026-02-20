@@ -1,0 +1,28 @@
+vibe: clean
+layout: TD
+
+// E-commerce cloud architecture with CDN, microservices and data layer
+
+<cdn|CDN> -> [gw|API Gateway]#info
+<users|Users> -> [gw|API Gateway]#info
+
+group "Frontend Tier" #info {
+  [gw|API Gateway] -> [web|Web Server], [mobile|Mobile BFF]
+}
+
+group "Service Mesh" #safe {
+  [web|Web Server], [mobile|Mobile BFF] -> [auth|Auth Service]
+  [web|Web Server] -> [catalog|Product Catalog]
+  [web|Web Server] -> [cart|Cart Service]
+  [cart|Cart Service] -> [order|Order Service]
+  [auth|Auth Service] -> (authdb|Auth DB)
+}
+
+group "Data Layer" {
+  [catalog|Product Catalog] -> (catalogdb|Catalog DB)
+  [order|Order Service] -> (orderdb|Order DB)
+  [cart|Cart Service] -> (redis|Redis Cache)#info
+}
+
+[order|Order Service] -> <stripe|Stripe>
+[order|Order Service] -> <mail|Email API>

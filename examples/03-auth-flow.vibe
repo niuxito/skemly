@@ -1,0 +1,21 @@
+vibe: clean
+layout: TD
+
+// Multi-factor authentication flow with decision gates
+
+[user|User] -> [login|Login Page]
+[login|Login Page] -> "submit" -> ?creds|Valid Credentials??
+
+?creds|Valid Credentials?? -> "no" -> [fail|Show Error]#danger
+?creds|Valid Credentials?? -> "yes" -> ?mfa|MFA Enabled??
+
+?mfa|MFA Enabled?? -> "no" -> [dash|Dashboard]#safe
+?mfa|MFA Enabled?? -> "yes" -> [otp|Enter OTP Code]
+
+[otp|Enter OTP Code] -> ?otpok|OTP Valid??
+
+?otpok|OTP Valid?? -> "yes" -> [dash|Dashboard]#safe
+?otpok|OTP Valid?? -> "no" -> ?attempts|Max Attempts??
+
+?attempts|Max Attempts?? -> "no" -> [otp|Enter OTP Code]
+?attempts|Max Attempts?? -> "yes" -> [locked|Account Locked]#danger

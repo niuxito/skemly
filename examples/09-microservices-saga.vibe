@@ -1,0 +1,23 @@
+vibe: clean
+layout: LR
+
+// Saga pattern — distributed transaction with compensating actions
+
+[client|Client] -> [orchestrator|Saga Orchestrator]#info
+
+group "Happy Path" #safe {
+  [orchestrator|Saga Orchestrator] -> "1. reserve" -> [inventory|Inventory Service]
+  [inventory|Inventory Service] -> "2. charge" -> [payment|Payment Service]
+  [payment|Payment Service] -> "3. ship" -> [shipping|Shipping Service]
+  [shipping|Shipping Service] -> "4. confirm" -> [orchestrator|Saga Orchestrator]
+}
+
+group "Compensation" #danger {
+  [shipping|Shipping Service] -> ?shipok|Ship OK??
+  ?shipok|Ship OK?? -> "fail" -> [comp3|Cancel Shipping]#danger
+  [comp3|Cancel Shipping] -> [comp2|Refund Payment]#danger
+  [comp2|Refund Payment] -> [comp1|Release Inventory]#danger
+  [comp1|Release Inventory] -> [orchestrator|Saga Orchestrator]
+}
+
+?shipok|Ship OK?? -> "ok" -> [done|Order Completed]#safe

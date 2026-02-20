@@ -1,0 +1,18 @@
+vibe: clean
+layout: MM
+
+[system|System Design] -> [scalability|Scalability], [reliability|Reliability], [security|Security], [observability|Observability]
+
+[scalability|Scalability] -> [horizontal|Horizontal Scaling], [caching|Caching], [sharding|DB Sharding], [cdn|CDN]
+
+[reliability|Reliability] -> [replication|Replication], [failover|Failover], [circuit|Circuit Breaker], [retry|Retry Logic]
+
+[security|Security] -> [authn|AuthN / AuthZ], [encryption|Encryption], [waf|WAF], [secrets|Secret Mgmt]
+
+[observability|Observability] -> [logs|Centralized Logs], [metrics|Metrics], [tracing|Distributed Tracing], [alerts|Alerting]
+
+[caching|Caching] -> (redis|Redis), (memcached|Memcached)
+[sharding|DB Sharding] -> (postgres|PostgreSQL), (mongo|MongoDB)
+[logs|Centralized Logs] -> <elk|ELK Stack>
+[metrics|Metrics] -> <prometheus|Prometheus>
+[tracing|Distributed Tracing] -> <jaeger|Jaeger>

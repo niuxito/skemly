@@ -1,0 +1,12 @@
+vibe: clean
+layout: MM
+
+[strategy|Product Strategy] -> [growth|Growth], [retention|Retention], [monetization|Monetization], [tech|Technology]
+
+[growth|Growth] -> [seo|SEO / Content], [ads|Paid Ads], [referral|Referral Program], [partnerships|Partnerships]
+
+[retention|Retention] -> [onboarding|Onboarding Flow], [notifications|Push Notifications], [loyalty|Loyalty Program], [support|Support Desk]
+
+[monetization|Monetization] -> [freemium|Freemium Tier], [pro|Pro Subscription], [enterprise|Enterprise Deals], [marketplace|Marketplace Fees]
+
+[tech|Technology] -> [perf|Performance], [api|Public API], [mobile|Mobile App], [ai|AI Features]

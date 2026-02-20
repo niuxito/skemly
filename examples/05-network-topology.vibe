@@ -1,0 +1,25 @@
+vibe: cyberpunk
+layout: TD
+
+// Segmented network topology with DMZ and internal zones
+
+<internet|Internet> -> [fw|Firewall]#danger
+
+group "DMZ" #warning {
+  [fw|Firewall] -> [lb|Load Balancer]
+  [lb|Load Balancer] -> [web1|Web Node 1], [web2|Web Node 2]
+}
+
+group "Application Zone" #info {
+  [web1|Web Node 1], [web2|Web Node 2] -> [app|App Cluster]
+  [app|App Cluster] -> (cache|Redis Cache)#info
+}
+
+group "Data Zone" #safe {
+  [app|App Cluster] -> (db|Primary DB)#safe
+  (db|Primary DB) -> (replica|Read Replica)
+  (db|Primary DB) -> (backup|Backup Storage)
+}
+
+[fw|Firewall] -> [ids|IDS / IPS]#warning
+[ids|IDS / IPS] -> <siem|SIEM Platform>

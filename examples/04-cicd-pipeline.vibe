@@ -1,0 +1,27 @@
+vibe: cyberpunk
+layout: LR
+
+// CI/CD pipeline — from commit to production
+
+[dev|Developer] -> "git push" -> [repo|Git Repository]
+
+group "CI Stage" #info {
+  [repo|Git Repository] -> [lint|Lint & Format]
+  [lint|Lint & Format] -> [test|Unit Tests]
+  [test|Unit Tests] -> [coverage|Coverage Check]
+  [coverage|Coverage Check] -> ?pass|Quality Gate??
+}
+
+?pass|Quality Gate?? -> "fail" -> [notify|Notify Dev]#danger
+?pass|Quality Gate?? -> "pass" -> [build|Build Image]
+
+group "CD Stage" #safe {
+  [build|Build Image] -> [registry|Container Registry]
+  [registry|Container Registry] -> [staging|Deploy Staging]
+  [staging|Deploy Staging] -> [smoke|Smoke Tests]
+  [smoke|Smoke Tests] -> ?approved|Approved??
+}
+
+?approved|Approved?? -> "no" -> [rollback|Rollback]#danger
+?approved|Approved?? -> "yes" -> [prod|Deploy Production]#safe
+[prod|Deploy Production] -> <monitor|Monitoring>

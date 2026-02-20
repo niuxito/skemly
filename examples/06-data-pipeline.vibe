@@ -1,0 +1,32 @@
+vibe: clean
+layout: LR
+
+// Real-time data pipeline — ingestion to serving
+
+group "Ingestion" #info {
+  <clickstream|Clickstream> -> [collector|Event Collector]
+  <api|REST API> -> [collector|Event Collector]
+  <iot|IoT Devices> -> [collector|Event Collector]
+  [collector|Event Collector] -> (queue|Kafka Queue)
+}
+
+group "Processing" #warning {
+  (queue|Kafka Queue) -> [stream|Stream Processor]
+  [stream|Stream Processor] -> ?valid|Valid Event??
+  ?valid|Event Valid?? -> "no" -> (dlq|Dead Letter Queue)#danger
+  ?valid|Event Valid?? -> "yes" -> [enrich|Enrichment Service]
+  [enrich|Enrichment Service] -> [aggregate|Aggregator]
+}
+
+group "Storage" #safe {
+  [aggregate|Aggregator] -> (warehouse|Data Warehouse)#safe
+  [aggregate|Aggregator] -> (cache|Hot Cache)#info
+  [stream|Stream Processor] -> (lake|Data Lake)
+}
+
+group "Serving" {
+  (warehouse|Data Warehouse) -> [api2|Query API]
+  (cache|Hot Cache) -> [api2|Query API]
+  [api2|Query API] -> [dashboard|Dashboard]
+  [api2|Query API] -> <ml|ML Platform>
+}
