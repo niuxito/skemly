@@ -195,11 +195,17 @@ async function runLayout(ast) {
   annotateLines(result.children)
 
   if (direction === 'RIGHT' && topLevelGroups.length > 1) {
-    // Post-process: arrange groups left-to-right and center each "sink" group
-    // vertically on the source nodes that point into it.
+    // Post-process: arrange top-level groups left-to-right.
+    //
+    // ORDER STRATEGY: sort by ELK's DOWN-layout Y position, NOT by topological
+    // sort. Topo-sort breaks when there are back-edges (e.g. ACK/NACK cycles);
+    // ELK already handles cycles internally and its Y ordering encodes the
+    // intended flow direction reliably.
+    //
+    // CENTERING: use only forward edges (earlier→later in Y order) so that
+    // back-edges (e.g. Consumers→Broker) don't distort group Y positions.
 
     // Helper: find top-level ancestor group for a node.
-    // nodeGroupMap gives the deepest group; we walk up to find the root.
     function topLevelGroupOf(nodeId) {
       let gId = nodeGroupMap[nodeId]
       if (!gId) return null
@@ -223,33 +229,25 @@ async function runLayout(ast) {
     }
     collectLeafPos(result.children, 0, 0)
 
-    // Build incoming-edge maps per TOP-LEVEL group.
-    // Using topLevelGroupOf ensures nested-group edges (e.g. queue→consumer)
-    // correctly register their top-level ancestor as the dependency.
-    const groupIncomingSources = {}  // groupId → Set<groupId>
-    const groupIncomingYs = {}       // groupId → y-centers of source nodes
+    // Sort top-level groups by their Y in the ELK DOWN result
+    const sortedGroupNodes = topLevelGroups
+      .map(g => result.children.find(c => c.id === g.id))
+      .filter(Boolean)
+      .sort((a, b) => (a.y ?? 0) - (b.y ?? 0))
+
+    // Build Y-centering hints: only accumulate from groups earlier in sorted order
+    // (forward edges), skipping back-edges that would skew the vertical alignment.
+    const groupIncomingYs = {}
     for (const e of edges) {
       const sg = topLevelGroupOf(e.from), tg = topLevelGroupOf(e.to)
-      if (sg && tg && sg !== tg) {
-        (groupIncomingSources[tg] ??= new Set()).add(sg)
+      if (!sg || !tg || sg === tg) continue
+      const sgIdx = sortedGroupNodes.findIndex(c => c.id === sg)
+      const tgIdx = sortedGroupNodes.findIndex(c => c.id === tg)
+      if (sgIdx >= 0 && tgIdx > sgIdx) {
         const p = leafPos[e.from]
         if (p) (groupIncomingYs[tg] ??= []).push(p.ay + p.h / 2)
       }
     }
-
-    // Topological sort: sources before sinks
-    const gIds = topLevelGroups.map(g => g.id)
-    const visited = new Set()
-    const sorted = []
-    function topoVisit(id) {
-      if (visited.has(id)) return
-      visited.add(id)
-      for (const dep of groupIncomingSources[id] ?? []) {
-        if (gIds.includes(dep)) topoVisit(dep)
-      }
-      sorted.push(id)
-    }
-    for (const id of gIds) topoVisit(id)
 
     // Snapshot group positions BEFORE repositioning (for edge translation)
     const groupOldPos = {}
@@ -257,13 +255,12 @@ async function runLayout(ast) {
       groupOldPos[c.id] = { x: c.x ?? 0, y: c.y ?? 0 }
     }
 
-    // Place groups left to right; center sink groups on their source nodes
+    // Place groups left to right in Y-sorted order;
+    // center each group vertically on its upstream source nodes
     let curX = 20
-    for (const gId of sorted) {
-      const gNode = result.children.find(c => c.id === gId)
-      if (!gNode) continue
+    for (const gNode of sortedGroupNodes) {
       gNode.x = curX
-      const ys = groupIncomingYs[gId]
+      const ys = groupIncomingYs[gNode.id]
       if (ys?.length) {
         const targetCY = (Math.min(...ys) + Math.max(...ys)) / 2
         gNode.y = Math.max(20, targetCY - (gNode.height ?? 0) / 2)
@@ -273,12 +270,8 @@ async function runLayout(ast) {
       curX += (gNode.width ?? 0) + spacing * 2
     }
 
-    // Update cross-TOP-LEVEL-group edge sections: translate startPoint by source
-    // top-level-group delta and endPoint by target top-level-group delta; discard
-    // bendPoints (stale in new layout). DiagramRenderer's synthesizer will build
-    // an orthogonal S-shaped path from the translated attachment points.
-    // Intra-top-level-group edges (e.g. within Broker) are left untouched so
-    // ELK's internally-computed routing is preserved.
+    // Translate cross-top-level-group edge sections by their group deltas.
+    // Intra-top-level-group edges (e.g. within Broker) are left untouched.
     for (const edge of result.edges ?? []) {
       const srcId = edge.sources?.[0]
       const tgtId = edge.targets?.[0]
