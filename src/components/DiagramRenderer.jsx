@@ -279,6 +279,7 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
     const nodeMap = {}
     const edgeMap = {}
     const groupMap = {}
+    const groupParentId = {}  // groupId → parent groupId (null = top-level)
 
     // Translate an edge's section points by an absolute offset
     function translateEdge(edge, dx, dy) {
@@ -295,7 +296,7 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
       }
     }
 
-    // node id → immediate parent group id (used to fix INCLUDE_CHILDREN edge coords)
+    // node id → immediate parent group id
     const nodeGroupId = {}
 
     // Traverse nested ELK children accumulating absolute offsets.
@@ -305,6 +306,7 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
         const absY = (child.y ?? 0) + offsetY
         if (child.children?.length) {
           groupMap[child.id] = { x: absX, y: absY, width: child.width, height: child.height }
+          groupParentId[child.id] = parentGroupId   // track group hierarchy
           traverse(child.children, absX, absY, child.id)
           // Collect any edges ELK placed inside the compound node (translate to root coords)
           for (const edge of child.edges ?? []) {
@@ -320,18 +322,29 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
     traverse(layout.children, 0, 0, null)
 
     // With INCLUDE_CHILDREN, ELK returns ALL edges at root level.
-    // Internal edges (both endpoints in same group) have coords relative to that group.
-    // Cross-group / ungrouped edges already have absolute coords.
-    // Empty-section edges → cleared by LR post-processing → fallback synthesizer handles them.
+    // Edge coordinates are relative to the LOWEST COMMON ANCESTOR (LCA) group
+    // of both endpoints. For cross-top-level edges the LCA is root → absolute.
+    // For intra-group edges (e.g. both within Broker) the LCA is that group.
+    //
+    // We find the LCA and translate the edge by that group's absolute position.
+    function lcaGroup(nodeAId, nodeBId) {
+      const aAncestors = new Set()
+      let g = nodeGroupId[nodeAId]
+      while (g) { aAncestors.add(g); g = groupParentId[g] ?? null }
+      g = nodeGroupId[nodeBId]
+      while (g) { if (aAncestors.has(g)) return g; g = groupParentId[g] ?? null }
+      return null  // no common group ancestor → root-relative (no translation needed)
+    }
+
     for (const edge of layout.edges ?? []) {
-      const srcId = edge.sources?.[0] ?? edge.sections?.[0]?.incomingShape
-      const tgtId = edge.targets?.[0] ?? edge.sections?.[0]?.outgoingShape
-      const srcGroup = nodeGroupId[srcId]
-      const tgtGroup = nodeGroupId[tgtId]
-      if (srcGroup && srcGroup === tgtGroup) {
-        const g = groupMap[srcGroup]
+      const srcId = edge.sources?.[0]
+      const tgtId = edge.targets?.[0]
+      const lca = lcaGroup(srcId, tgtId)
+      if (lca) {
+        const g = groupMap[lca]
         edgeMap[edge.id] = g ? translateEdge(edge, g.x, g.y) : edge
       } else {
+        // Cross-top-level-group or ungrouped: coordinates are already absolute
         edgeMap[edge.id] = edge
       }
     }
