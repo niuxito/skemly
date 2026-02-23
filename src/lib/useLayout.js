@@ -229,11 +229,13 @@ async function runLayout(ast) {
     }
     collectLeafPos(result.children, 0, 0)
 
-    // Sort top-level groups by their Y in the ELK DOWN result
+    // Use DSL definition order of top-level groups for LR positioning.
+    // Y-sorting and topo-sort both break when back-edges create cycles
+    // (e.g. ACK/NACK Consumers→Broker). The user writes groups in the
+    // intended left-to-right flow order, so DSL order is the right heuristic.
     const sortedGroupNodes = topLevelGroups
       .map(g => result.children.find(c => c.id === g.id))
       .filter(Boolean)
-      .sort((a, b) => (a.y ?? 0) - (b.y ?? 0))
 
     // Build Y-centering hints: only accumulate from groups earlier in sorted order
     // (forward edges), skipping back-edges that would skew the vertical alignment.
