@@ -1,11 +1,11 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
-import { parseDSL } from './lib/parser.js'
+import { parseDSL, normalizeId } from './lib/parser.js'
 import { useLayout } from './lib/useLayout.js'
 import { THEMES } from './lib/themes.js'
 import DiagramRenderer from './components/DiagramRenderer.jsx'
 import ExamplesPanel from './components/ExamplesPanel.jsx'
 import ChatPanel from './components/ChatPanel.jsx'
-import { Download, Copy, Check, AlertTriangle, BookOpen, MessageSquare, Code2, Trash2, Plus, ChevronDown } from 'lucide-react'
+import { Download, Copy, Check, AlertTriangle, BookOpen, MessageSquare, Code2, Trash2, Plus, ChevronDown, Link } from 'lucide-react'
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
 const SESSIONS_KEY = 'vibediag_sessions'
@@ -48,6 +48,46 @@ function deriveTitle(dsl, messages) {
   const firstUser = messages?.find(m => m.role === 'user')
   if (firstUser) return firstUser.content.slice(0, 35)
   return 'Sin título'
+}
+
+// ─── DSL label rewriter ───────────────────────────────────────────────────────
+function escapeRegex(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+// Rewrites a node's label in the raw DSL text, preserving explicit ids and edges.
+function rewriteNodeLabel(dsl, idKey, oldLabel, newLabel) {
+  const hasExplicitId = normalizeId(oldLabel) !== idKey
+
+  // Shape delimiter pairs used in the DSL
+  const shapes = [
+    { open: '[', close: ']' },
+    { open: '(', close: ')' },
+    { open: '<', close: '>' },
+    { open: '?', close: '?' },
+  ]
+
+  let result = dsl
+  for (const { open, close } of shapes) {
+    const eo = escapeRegex(open)
+    const ec = escapeRegex(close)
+    const el = escapeRegex(oldLabel)
+
+    if (hasExplicitId) {
+      // [rawId|oldLabel] → [rawId|newLabel]  (case-insensitive id match)
+      const re = new RegExp(`${eo}([^|${ec}]*)\\|${el}${ec}`, 'g')
+      result = result.replace(re, (match, rawId) =>
+        normalizeId(rawId) === idKey
+          ? `${open}${rawId}|${newLabel}${close}`
+          : match
+      )
+    } else {
+      // [oldLabel] → [idKey|newLabel]  (inject explicit id to preserve edges)
+      const re = new RegExp(`${eo}${el}${ec}`, 'g')
+      result = result.replace(re, `${open}${idKey}|${newLabel}${close}`)
+    }
+  }
+  return result
 }
 
 function relativeTime(ts) {
@@ -125,6 +165,7 @@ export default function App() {
   // ─── Other state ─────────────────────────────────────────────────────────
   const [ast, setAst] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [shared, setShared] = useState(false)
   const [examplesOpen, setExamplesOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('editor')
   const svgRef = useRef(null)
@@ -165,6 +206,13 @@ export default function App() {
     setHistoryOpen(false)
   }, [])
 
+  const handleNodeLabelChange = useCallback((idKey, newLabel) => {
+    if (!ast) return
+    const node = ast.nodes.find(n => n.id_key === idKey)
+    if (!node) return
+    updateCurrentSession({ dsl: rewriteNodeLabel(dsl, idKey, node.label, newLabel) })
+  }, [ast, dsl, updateCurrentSession])
+
   const handleDeleteSession = useCallback((id) => {
     setSessions(prev => {
       const next = prev.filter(s => s.id !== id)
@@ -189,6 +237,31 @@ export default function App() {
   useEffect(() => {
     if (activeSessionId) localStorage.setItem(ACTIVE_KEY, activeSessionId)
   }, [activeSessionId])
+
+  // ─── Shared DSL via URL hash ──────────────────────────────────────────────
+  useEffect(() => {
+    const hash = window.location.hash.slice(1)
+    if (!hash.startsWith('dsl=')) return
+    try {
+      const sharedDsl = decodeURIComponent(atob(hash.slice(4)))
+      const s = createSession(sharedDsl)
+      s.title = deriveTitle(sharedDsl, [])
+      setSessions(prev => [s, ...prev])
+      setActiveSessionId(s.id)
+      window.history.replaceState(null, '', window.location.pathname)
+    } catch {
+      // malformed hash — ignore
+    }
+  }, []) // runs once on mount
+
+  const shareDiagram = useCallback(async () => {
+    if (!dsl) return
+    const encoded = btoa(encodeURIComponent(dsl))
+    const url = `${window.location.origin}${window.location.pathname}#dsl=${encoded}`
+    await navigator.clipboard.writeText(url)
+    setShared(true)
+    setTimeout(() => setShared(false), 2000)
+  }, [dsl])
 
   // ─── Auto-title (debounced 800ms) ─────────────────────────────────────────
   useEffect(() => {
@@ -421,6 +494,14 @@ export default function App() {
         {/* Action buttons */}
         <div className="flex items-center gap-2">
           <button
+            onClick={shareDiagram}
+            className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${ts.btnSecondary}`}
+            title="Copy shareable link"
+          >
+            {shared ? <Check size={12} /> : <Link size={12} />}
+            {shared ? 'Copied!' : 'Share'}
+          </button>
+          <button
             onClick={copyDSL}
             className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${ts.btnSecondary}`}
           >
@@ -582,6 +663,7 @@ export default function App() {
             elkLayout={elkLayout}
             svgRef={svgRef}
             canvasRef={canvasRef}
+            onNodeLabelChange={handleNodeLabelChange}
           />
         </div>
       </div>

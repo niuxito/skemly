@@ -24,8 +24,11 @@ const SYSTEM_PROMPT = `You are an expert diagramming assistant for Vibedrawing, 
 - Groups: group "Title" #tag { ... } — can be nested
 
 ### Directives (top of file)
-- vibe: clean | handdrawn | cyberpunk (default: clean)
-- layout: TD | LR | MM (default: TD). Use MM for mindmaps.
+- vibe: clean | handdrawn | cyberpunk (default: clean) — affects visual rendering ONLY, never layout or positioning
+- layout: TD | LR | MM (default: TD)
+  - TD (Top-Down): best for sequential flows, pipelines, decision trees, and single-chain processes. Groups stack vertically.
+  - LR (Left-Right): best when there are multiple parallel groups, phases, or clusters that should appear side by side. Use LR when the diagram has 2+ groups whose nodes flow horizontally (e.g. a pipeline with stages, an architecture with distinct layers, or a long chain in one group with a summary group beside it).
+  - MM: use for mindmaps and concept maps only.
 - spacing: <number> (default: 40)
 - edgeLabels: on | off (default: on)
 
