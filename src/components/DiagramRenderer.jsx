@@ -430,26 +430,59 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
         {/* Edges */}
         {ast.edges.map((edge, i) => {
           let elkEdge = edgeMap[`e${i}`]
-          // Fallback for cross-group edges: ELK can't route them when nodes are nested
-          // in compound nodes without INCLUDE_CHILDREN → synthesize from node positions
-          if ((!elkEdge?.sections?.length) && nodeMap) {
-            const src = nodeMap[edge.from]
-            const tgt = nodeMap[edge.to]
-            if (src && tgt) {
-              const srcCX = src.x + src.width / 2,  srcCY = src.y + src.height / 2
-              const tgtCX = tgt.x + tgt.width / 2,  tgtCY = tgt.y + tgt.height / 2
-              const dx = tgtCX - srcCX, dy = tgtCY - srcCY
-              let startPoint, endPoint
-              if (Math.abs(dx) >= Math.abs(dy)) {
-                // Horizontal dominant — connect left/right edges
-                startPoint = dx > 0 ? { x: src.x + src.width, y: srcCY } : { x: src.x, y: srcCY }
-                endPoint   = dx > 0 ? { x: tgt.x, y: tgtCY }             : { x: tgt.x + tgt.width, y: tgtCY }
-              } else {
-                // Vertical dominant — connect top/bottom edges
-                startPoint = dy > 0 ? { x: srcCX, y: src.y + src.height } : { x: srcCX, y: src.y }
-                endPoint   = dy > 0 ? { x: tgtCX, y: tgt.y }              : { x: tgtCX, y: tgt.y + tgt.height }
+          // Fallback for cross-group edges with missing or empty sections.
+          // Synthesizes an orthogonal S-shaped path routing through the gap between
+          // nodes, avoiding crossing intermediate shapes.
+          // NOTE: never touch mindmap edges — they use isBezier sections without bendPoints.
+          if (nodeMap && !elkLayout.isMindmap) {
+            const sec = elkEdge?.sections
+            // Sections present but bendPoints cleared (LR post-processing translated
+            // start/end) → add orthogonal bends between the two attachment points.
+            // Guard: skip bezier sections (mindmap edges use isBezier + cp1/cp2).
+            const needsBends = sec?.length && sec.every(s => !s.isBezier && !s.bendPoints?.length)
+            // No sections at all → compute attachment points from node bounds too.
+            const noSections = !sec?.length
+
+            if (needsBends || noSections) {
+              const src = nodeMap[edge.from]
+              const tgt = nodeMap[edge.to]
+              if (src && tgt) {
+                let startPoint, endPoint
+
+                if (needsBends) {
+                  // Use already-translated attachment points from ELK
+                  startPoint = sec[0].startPoint
+                  endPoint   = sec[sec.length - 1].endPoint
+                } else {
+                  // Compute attachment points from node bounds
+                  const srcCX = src.x + src.width / 2,  srcCY = src.y + src.height / 2
+                  const tgtCX = tgt.x + tgt.width / 2,  tgtCY = tgt.y + tgt.height / 2
+                  const dx = tgtCX - srcCX, dy = tgtCY - srcCY
+                  if (Math.abs(dx) >= Math.abs(dy)) {
+                    startPoint = dx > 0 ? { x: src.x + src.width, y: srcCY } : { x: src.x, y: srcCY }
+                    endPoint   = dx > 0 ? { x: tgt.x, y: tgtCY }             : { x: tgt.x + tgt.width, y: tgtCY }
+                  } else {
+                    startPoint = dy > 0 ? { x: srcCX, y: src.y + src.height } : { x: srcCX, y: src.y }
+                    endPoint   = dy > 0 ? { x: tgtCX, y: tgt.y }              : { x: tgtCX, y: tgt.y + tgt.height }
+                  }
+                }
+
+                // Build orthogonal S-shaped bend through the midpoint of the gap
+                const adx = Math.abs(endPoint.x - startPoint.x)
+                const ady = Math.abs(endPoint.y - startPoint.y)
+                let bendPoints
+                if (adx >= ady) {
+                  // Horizontal dominant: exit right/left, bend at gap midpoint, enter left/right
+                  const midX = (startPoint.x + endPoint.x) / 2
+                  bendPoints = [{ x: midX, y: startPoint.y }, { x: midX, y: endPoint.y }]
+                } else {
+                  // Vertical dominant: exit bottom/top, bend at gap midpoint, enter top/bottom
+                  const midY = (startPoint.y + endPoint.y) / 2
+                  bendPoints = [{ x: startPoint.x, y: midY }, { x: endPoint.x, y: midY }]
+                }
+
+                elkEdge = { ...elkEdge, sections: [{ startPoint, endPoint, bendPoints }] }
               }
-              elkEdge = { ...elkEdge, sections: [{ startPoint, endPoint }] }
             }
           }
           return <EdgePath key={i} edge={edge} elkEdge={elkEdge}

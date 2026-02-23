@@ -110,6 +110,8 @@ async function runLayout(ast) {
         'elk.spacing.nodeNode': String(spacing),
         'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing * 1.5),
         'elk.padding': '[top=20,left=20,right=20,bottom=20]',
+        'elk.edgeRouting': 'ORTHOGONAL',
+        'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
       },
       children: elkNodes,
       edges: elkEdges,
@@ -155,6 +157,8 @@ async function runLayout(ast) {
         'elk.padding': '[top=40,left=20,right=20,bottom=20]',
         'elk.spacing.nodeNode': String(spacing),
         'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing * 1.5),
+        'elk.edgeRouting': 'ORTHOGONAL',
+        'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
       },
       children: [
         ...directNodes.map(n => elkLeafNode(n)),
@@ -177,6 +181,8 @@ async function runLayout(ast) {
       'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing * 1.5),
       'elk.padding': '[top=20,left=20,right=20,bottom=20]',
       'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
+      'elk.edgeRouting': 'ORTHOGONAL',
+      'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
     },
     children: [
       ...ungroupedNodes.map(n => elkLeafNode(n)),
@@ -192,6 +198,20 @@ async function runLayout(ast) {
     // Post-process: arrange groups left-to-right and center each "sink" group
     // vertically on the source nodes that point into it.
 
+    // Helper: find top-level ancestor group for a node.
+    // nodeGroupMap gives the deepest group; we walk up to find the root.
+    function topLevelGroupOf(nodeId) {
+      let gId = nodeGroupMap[nodeId]
+      if (!gId) return null
+      let g = groups.find(x => x.id === gId)
+      while (g?.parentId) {
+        const parent = groups.find(x => x.id === g.parentId)
+        if (!parent) break
+        g = parent
+      }
+      return g?.id ?? null
+    }
+
     // Collect absolute leaf positions from the ELK (DOWN) result
     const leafPos = {}
     function collectLeafPos(children, ox, oy) {
@@ -203,11 +223,13 @@ async function runLayout(ast) {
     }
     collectLeafPos(result.children, 0, 0)
 
-    // Build incoming-edge maps per group
+    // Build incoming-edge maps per TOP-LEVEL group.
+    // Using topLevelGroupOf ensures nested-group edges (e.g. queue→consumer)
+    // correctly register their top-level ancestor as the dependency.
     const groupIncomingSources = {}  // groupId → Set<groupId>
     const groupIncomingYs = {}       // groupId → y-centers of source nodes
     for (const e of edges) {
-      const sg = nodeGroupMap[e.from], tg = nodeGroupMap[e.to]
+      const sg = topLevelGroupOf(e.from), tg = topLevelGroupOf(e.to)
       if (sg && tg && sg !== tg) {
         (groupIncomingSources[tg] ??= new Set()).add(sg)
         const p = leafPos[e.from]
@@ -229,6 +251,12 @@ async function runLayout(ast) {
     }
     for (const id of gIds) topoVisit(id)
 
+    // Snapshot group positions BEFORE repositioning (for edge translation)
+    const groupOldPos = {}
+    for (const c of result.children ?? []) {
+      groupOldPos[c.id] = { x: c.x ?? 0, y: c.y ?? 0 }
+    }
+
     // Place groups left to right; center sink groups on their source nodes
     let curX = 20
     for (const gId of sorted) {
@@ -245,12 +273,44 @@ async function runLayout(ast) {
       curX += (gNode.width ?? 0) + spacing * 2
     }
 
-    // Clear cross-group edge sections — the fallback synthesizer in DiagramRenderer
-    // will draw them using the updated absolute node positions
+    // Update cross-TOP-LEVEL-group edge sections: translate startPoint by source
+    // top-level-group delta and endPoint by target top-level-group delta; discard
+    // bendPoints (stale in new layout). DiagramRenderer's synthesizer will build
+    // an orthogonal S-shaped path from the translated attachment points.
+    // Intra-top-level-group edges (e.g. within Broker) are left untouched so
+    // ELK's internally-computed routing is preserved.
     for (const edge of result.edges ?? []) {
-      const sg = nodeGroupMap[edge.sources?.[0]]
-      const tg = nodeGroupMap[edge.targets?.[0]]
-      if (sg !== tg) edge.sections = []
+      const srcId = edge.sources?.[0]
+      const tgtId = edge.targets?.[0]
+      const sg = topLevelGroupOf(srcId)
+      const tg = topLevelGroupOf(tgtId)
+      if (sg && tg && sg !== tg) {
+        const srcGroupNode = result.children.find(c => c.id === sg)
+        const tgtGroupNode = result.children.find(c => c.id === tg)
+        const oldSrc = groupOldPos[sg] ?? { x: 0, y: 0 }
+        const oldTgt = groupOldPos[tg] ?? { x: 0, y: 0 }
+        const dxSrc = (srcGroupNode?.x ?? 0) - oldSrc.x
+        const dySrc = (srcGroupNode?.y ?? 0) - oldSrc.y
+        const dxTgt = (tgtGroupNode?.x ?? 0) - oldTgt.x
+        const dyTgt = (tgtGroupNode?.y ?? 0) - oldTgt.y
+
+        if (edge.sections?.length) {
+          // Translate startPoint (source side) and endPoint (target side);
+          // drop bendPoints because the inter-group space has shifted.
+          edge.sections = edge.sections.map((s, si) => ({
+            ...s,
+            startPoint: si === 0
+              ? { x: s.startPoint.x + dxSrc, y: s.startPoint.y + dySrc }
+              : s.startPoint,
+            endPoint: si === edge.sections.length - 1
+              ? { x: s.endPoint.x + dxTgt, y: s.endPoint.y + dyTgt }
+              : s.endPoint,
+            bendPoints: [],   // cleared — synthesizer will add orthogonal bends
+          }))
+        } else {
+          edge.sections = []  // trigger synthesizer
+        }
+      }
     }
 
     // Expand canvas to fit all repositioned groups

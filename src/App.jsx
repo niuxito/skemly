@@ -671,7 +671,13 @@ export default function App() {
       <ExamplesPanel
         open={examplesOpen}
         onClose={() => setExamplesOpen(false)}
-        onLoad={(newDsl) => updateCurrentSession({ dsl: newDsl })}
+        onLoad={(newDsl) => {
+          const s = createSession(newDsl)
+          s.title = deriveTitle(newDsl, [])
+          setSessions(prev => [s, ...prev])
+          setActiveSessionId(s.id)
+          setExamplesOpen(false)
+        }}
         currentTheme={themeName}
       />
     </div>
