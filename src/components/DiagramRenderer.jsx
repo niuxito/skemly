@@ -58,11 +58,13 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
         const rx = w / 2, ry = 10
         return (
           <g filter={glowFilter}>
-            <ellipse cx={cx} cy={y + ry} rx={rx} ry={ry} fill={fill} stroke={stroke} strokeWidth={theme.nodeStrokeWidth} />
             <rect x={x} y={y + ry} width={w} height={h - ry * 2} fill={fill} stroke="none" />
             <line x1={x} y1={y + ry} x2={x} y2={y + h - ry} stroke={stroke} strokeWidth={theme.nodeStrokeWidth} />
             <line x1={x + w} y1={y + ry} x2={x + w} y2={y + h - ry} stroke={stroke} strokeWidth={theme.nodeStrokeWidth} />
-            <ellipse cx={cx} cy={y + h - ry} rx={rx} ry={ry} fill={fill} stroke={stroke} strokeWidth={theme.nodeStrokeWidth} />
+            {/* Bottom rim: fill="none" so text above isn't visually covered */}
+            <ellipse cx={cx} cy={y + h - ry} rx={rx} ry={ry} fill="none" stroke={stroke} strokeWidth={theme.nodeStrokeWidth} />
+            {/* Top face drawn last so it appears above the body */}
+            <ellipse cx={cx} cy={y + ry} rx={rx} ry={ry} fill={fill} stroke={stroke} strokeWidth={theme.nodeStrokeWidth} />
           </g>
         )
       }
@@ -99,8 +101,11 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
         </text>
       )
     }
+    // Cylinder: center in the body between ellipse caps (cy is already the body center).
+    // Other shapes: +1 compensates for visual baseline rendering.
+    const textY = node.shape === 'cylinder' ? cy + textYOffset : cy + textYOffset + 1
     return (
-      <text x={cx} y={cy + textYOffset + 5} textAnchor="middle" dominantBaseline="middle"
+      <text x={cx} y={textY} textAnchor="middle" dominantBaseline="middle"
         fontFamily={theme.font} fontSize={theme.fontSize} fill={textColor}
         visibility={textVisibility}
         style={{ userSelect: 'none', pointerEvents: 'none' }}>
@@ -543,7 +548,7 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
                   ))}
                 </text>
               ) : (
-                <text x={cx} y={cy + textYOffset + 5}
+                <text x={cx} y={cy + textYOffset + (node.shape === 'cylinder' ? 0 : 1)}
                   textAnchor="middle" dominantBaseline="middle"
                   fontFamily={theme.font} fontSize={theme.fontSize} fill={textColor}
                   visibility={textVis}
