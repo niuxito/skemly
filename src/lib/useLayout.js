@@ -279,7 +279,7 @@ async function runLayout(ast) {
       const tgtId = edge.targets?.[0]
       const sg = topLevelGroupOf(srcId)
       const tg = topLevelGroupOf(tgtId)
-      if (sg && tg && sg !== tg) {
+      if (sg !== tg && (sg || tg)) {  // at least one endpoint is in a group
         const srcGroupNode = result.children.find(c => c.id === sg)
         const tgtGroupNode = result.children.find(c => c.id === tg)
         const oldSrc = groupOldPos[sg] ?? { x: 0, y: 0 }
