@@ -166,6 +166,7 @@ export default function App() {
   const [ast, setAst] = useState(null)
   const [copied, setCopied] = useState(false)
   const [shared, setShared] = useState(false)
+  const [remainingRequests, setRemainingRequests] = useState(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('editor')
   const svgRef = useRef(null)
@@ -651,6 +652,8 @@ export default function App() {
               onDslUpdate={handleDslUpdate}
               currentDsl={dsl}
               theme={themeName}
+              remainingRequests={remainingRequests}
+              onRemainingChange={setRemainingRequests}
               key={activeSessionId ?? sessions[0]?.id}
             />
           </div>

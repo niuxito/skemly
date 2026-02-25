@@ -1,13 +1,14 @@
 /**
  * Production server — serves dist/ static files + POST /api/chat proxy.
  * Run after `npm run build`:  node server.js
- * Reads ANTHROPIC_API_KEY from environment (never exposed to the client).
+ * Reads ANTHROPIC_API_KEY, DATABASE_URL, DAILY_LIMIT from environment.
  */
 import { createServer } from 'http'
 import { request as httpsRequest } from 'https'
 import { readFile } from 'fs/promises'
 import { join, extname } from 'path'
 import { fileURLToPath } from 'url'
+import { checkRateLimit } from './api/_rateLimit.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const DIST = join(__dirname, 'dist')
@@ -24,39 +25,72 @@ const MIME = {
   '.woff2': 'font/woff2',
 }
 
-function handleChat(req, res) {
+function readBody(req) {
+  return new Promise(resolve => {
+    let body = ''
+    req.on('data', chunk => { body += chunk })
+    req.on('end', () => resolve(body))
+  })
+}
+
+async function handleChat(req, res) {
   if (!API_KEY) {
     res.writeHead(500, { 'Content-Type': 'application/json' })
     res.end(JSON.stringify({ error: { message: 'ANTHROPIC_API_KEY not configured on server' } }))
     return
   }
 
-  let body = ''
-  req.on('data', chunk => { body += chunk })
-  req.on('end', () => {
-    const proxyReq = httpsRequest(
-      {
-        hostname: 'api.anthropic.com',
-        path: '/v1/messages',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': API_KEY,
-          'anthropic-version': '2023-06-01',
-        },
-      },
-      proxyRes => {
-        res.writeHead(proxyRes.statusCode, { 'Content-Type': 'application/json' })
-        proxyRes.pipe(res)
-      }
-    )
-    proxyReq.on('error', err => {
-      res.writeHead(502, { 'Content-Type': 'application/json' })
-      res.end(JSON.stringify({ error: { message: `Proxy error: ${err.message}` } }))
-    })
-    proxyReq.write(body)
-    proxyReq.end()
+  // ─── Rate limiting ──────────────────────────────────────────────────────
+  const ip = (req.headers['x-forwarded-for'] ?? '127.0.0.1').split(',')[0].trim()
+  const rl = await checkRateLimit({
+    ip,
+    databaseUrl: process.env.DATABASE_URL,
+    dailyLimit: parseInt(process.env.DAILY_LIMIT ?? '20', 10),
   })
+
+  if (!rl.allowed) {
+    res.writeHead(429, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({
+      error: {
+        type: 'rate_limit_exceeded',
+        limit: rl.limit,
+        reset_at: rl.resetAt,
+        remaining: 0,
+      },
+    }))
+    return
+  }
+
+  const responseHeaders = { 'Content-Type': 'application/json' }
+  if (rl.remaining !== null) {
+    responseHeaders['X-RateLimit-Remaining'] = String(rl.remaining)
+  }
+
+  // ─── Proxy to Anthropic ─────────────────────────────────────────────────
+  const body = await readBody(req)
+
+  const proxyReq = httpsRequest(
+    {
+      hostname: 'api.anthropic.com',
+      path: '/v1/messages',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': API_KEY,
+        'anthropic-version': '2023-06-01',
+      },
+    },
+    proxyRes => {
+      res.writeHead(proxyRes.statusCode, responseHeaders)
+      proxyRes.pipe(res)
+    }
+  )
+  proxyReq.on('error', err => {
+    res.writeHead(502, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: { message: `Proxy error: ${err.message}` } }))
+  })
+  proxyReq.write(body)
+  proxyReq.end()
 }
 
 async function handleStatic(req, res) {
@@ -80,11 +114,11 @@ async function handleStatic(req, res) {
   }
 }
 
-createServer((req, res) => {
+createServer(async (req, res) => {
   if (req.url === '/api/chat' && req.method === 'POST') {
-    handleChat(req, res)
+    await handleChat(req, res)
   } else {
-    handleStatic(req, res)
+    await handleStatic(req, res)
   }
 }).listen(PORT, () => {
   console.log(`Vibedrawing server running at http://localhost:${PORT}`)

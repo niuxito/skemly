@@ -94,7 +94,7 @@ function MessageBubble({ msg, onReapply, tk }) {
   )
 }
 
-export default function ChatPanel({ messages, chatHistory, onMessagesChange, onDslUpdate, currentDsl, theme }) {
+export default function ChatPanel({ messages, chatHistory, onMessagesChange, onDslUpdate, currentDsl, theme, remainingRequests, onRemainingChange }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef(null)
@@ -121,7 +121,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
     setLoading(true)
 
     try {
-      const result = await callClaude(text, chatHistory, currentDsl)
+      const { dsl: result, remaining } = await callClaude(text, chatHistory, currentDsl)
       const isDsl = looksLikeDsl(result)
 
       const assistantMsg = {
@@ -137,6 +137,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
       ]
       onMessagesChange([...newMessages, assistantMsg], newHistory)
 
+      if (remaining !== null) onRemainingChange?.(remaining)
       if (isDsl) {
         onDslUpdate(result)
       }
@@ -210,6 +211,11 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
             <Send size={14} />
           </button>
         </div>
+        {remainingRequests !== null && (
+          <p className={`text-center text-xs mt-1 ${tk.subtext} opacity-60`}>
+            {remainingRequests} solicitudes restantes hoy
+          </p>
+        )}
       </div>
     </div>
   )

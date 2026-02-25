@@ -107,6 +107,22 @@ export async function callClaude(userMessage, chatHistory, currentDsl) {
   })
 
   if (!response.ok) {
+    // Special handling for our IP rate limit 429
+    if (response.status === 429) {
+      let errBody
+      try { errBody = await response.json() } catch { /* ignore */ }
+      if (errBody?.error?.type === 'rate_limit_exceeded') {
+        const resetAt = new Date(errBody.error.reset_at)
+        const diffMs = resetAt - Date.now()
+        const diffH = Math.floor(diffMs / 3_600_000)
+        const diffM = Math.floor((diffMs % 3_600_000) / 60_000)
+        const timeStr = diffH > 0 ? `${diffH}h ${diffM}m` : `${diffM}m`
+        throw new Error(
+          `Has alcanzado el límite diario (${errBody.error.limit} solicitudes). Podrás volver a usar el asistente a las 00:00 UTC (en ${timeStr}).`
+        )
+      }
+    }
+
     const friendlyErrors = {
       429: 'Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.',
       503: 'El asistente no está disponible temporalmente. Inténtalo en unos segundos.',
@@ -120,5 +136,10 @@ export async function callClaude(userMessage, chatHistory, currentDsl) {
 
   const data = await response.json()
   const rawText = data?.content?.[0]?.text ?? ''
-  return stripFences(rawText)
+  const dsl = stripFences(rawText)
+
+  const remainingHeader = response.headers.get('X-RateLimit-Remaining')
+  const remaining = remainingHeader !== null ? parseInt(remainingHeader, 10) : null
+
+  return { dsl, remaining }
 }
