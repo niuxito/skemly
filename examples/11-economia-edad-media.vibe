@@ -1,0 +1,39 @@
+vibe: clean
+layout: TD
+
+// Economía en la Edad Media
+
+[tierra|La Tierra]#info -> [feudal|Sistema Feudal]#warning
+
+group "Estructura Social y Poder" #warning {
+  [rey|Rey] -> "concede tierras" -> [nobles|Nobles / Señores]
+  [nobles|Nobles / Señores] -> "subarrienda tierras" -> [caballeros|Caballeros]
+  [caballeros|Caballeros] -> "protegen a" -> [siervos|Siervos / Campesinos]#danger
+  [siervos|Siervos / Campesinos] -> "pagan tributos a" -> [nobles|Nobles / Señores]
+}
+
+group "Producción Agrícola" #safe {
+  [siervos|Siervos / Campesinos] -> "cultivan" -> [manoro|Señorío / Manor]
+  [manoro|Señorío / Manor] -> "produce" -> [trigo|Cereales y Alimentos]#safe
+  [manoro|Señorío / Manor] -> "produce" -> [ganado|Ganado y Lana]#safe
+  [trigo|Cereales y Alimentos] -> "excedente" -> [mercado|Mercado Local]#info
+  [ganado|Ganado y Lana] -> "excedente" -> [mercado|Mercado Local]
+}
+
+group "Comercio y Artesanía" #info {
+  [mercado|Mercado Local] -> "atrae" -> [gremios|Gremios Artesanales]#info
+  [gremios|Gremios Artesanales] -> "producen" -> [articulos|Bienes Manufacturados]
+  [mercado|Mercado Local] -> "crece en" -> [ciudad|Burgos / Ciudades]#info
+  [ciudad|Burgos / Ciudades] -> "impulsa" -> [comercio|Comercio Regional]
+  [comercio|Comercio Regional] -> "conecta con" -> <rutas|Rutas Comerciales>
+}
+
+group "Iglesia y Finanzas" #warning {
+  [iglesia|Iglesia]#warning -> "cobra" -> [diezmo|Diezmo 10%]#danger
+  [iglesia|Iglesia] -> "prohíbe" -> [usura|Usura / Interés]#danger
+  [judios|Prestamistas / Judíos]#danger -> "financian" -> [comercio|Comercio Regional]
+  [diezmo|Diezmo 10%] -> "acumula" -> [riquezaig|Riqueza Eclesiástica]#warning
+}
+
+<rutas|Rutas Comerciales> -> "genera" -> [burguesia|Burguesía Emergente]#safe
+[burguesia|Burguesía Emergente] -> "debilita" -> [feudal|Sistema Feudal]

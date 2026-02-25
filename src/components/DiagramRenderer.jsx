@@ -146,13 +146,39 @@ function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
   }
 
   const showLabels = directives?.edgeLabels !== 'off'
-  const labelEl = elkEdge.labels?.[0]
   const isBidi = edge.dir === '<->'
   const glowFilter = theme.glow ? `drop-shadow(0 0 3px ${theme.edgeStroke})` : undefined
 
   // Mindmap: thicker strokes, no arrowheads
   const stroke = theme.edgeStroke
   const strokeW = isMindmap ? theme.edgeStrokeWidth + 0.5 : theme.edgeStrokeWidth
+
+  // Compute label position from the actual path midpoint.
+  // ELK's label x/y are computed during DOWN layout and become stale after LR
+  // post-processing (groups repositioned, sections translated but labels not).
+  // Using path midpoint is always correct regardless of layout direction.
+  let labelMidX, labelMidY
+  if (showLabels && edge.label && elkEdge.sections?.length) {
+    const firstSec = elkEdge.sections[0]
+    const lastSec  = elkEdge.sections[elkEdge.sections.length - 1]
+    if (firstSec.isBezier && firstSec.cp1 && firstSec.cp2) {
+      // Cubic bezier midpoint at t=0.5
+      const t = 0.5, mt = 1 - t
+      labelMidX = mt**3*firstSec.startPoint.x + 3*mt**2*t*firstSec.cp1.x + 3*mt*t**2*firstSec.cp2.x + t**3*firstSec.endPoint.x
+      labelMidY = mt**3*firstSec.startPoint.y + 3*mt**2*t*firstSec.cp1.y + 3*mt*t**2*firstSec.cp2.y + t**3*firstSec.endPoint.y
+    } else {
+      // Collect all path points, take midpoint of middle segment
+      const allPts = []
+      for (const s of elkEdge.sections) {
+        allPts.push(s.startPoint, ...(s.bendPoints || []))
+      }
+      allPts.push(lastSec.endPoint)
+      const midIdx = Math.floor((allPts.length - 1) / 2)
+      const p1 = allPts[midIdx], p2 = allPts[midIdx + 1] ?? allPts[midIdx]
+      labelMidX = (p1.x + p2.x) / 2
+      labelMidY = (p1.y + p2.y) / 2
+    }
+  }
 
   return (
     <g>
@@ -161,8 +187,8 @@ function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
         markerEnd={isMindmap ? undefined : 'url(#arrowhead)'}
         markerStart={!isMindmap && isBidi ? 'url(#arrowhead-start)' : undefined}
         filter={glowFilter} />
-      {showLabels && labelEl && edge.label && (
-        <text x={labelEl.x + (labelEl.width ?? 0) / 2} y={labelEl.y + (labelEl.height ?? 0) / 2}
+      {showLabels && edge.label && labelMidX != null && (
+        <text x={labelMidX} y={labelMidY}
           textAnchor="middle" dominantBaseline="middle"
           fontFamily={theme.font} fontSize={theme.fontSize - 1} fill={theme.labelText}
           style={{ userSelect: 'none' }}>

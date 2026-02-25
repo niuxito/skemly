@@ -107,12 +107,15 @@ export async function callClaude(userMessage, chatHistory, currentDsl) {
   })
 
   if (!response.ok) {
-    let errorMsg = `API error ${response.status}`
-    try {
-      const errData = await response.json()
-      errorMsg = errData?.error?.message ?? errorMsg
-    } catch (_) {}
-    throw new Error(errorMsg)
+    const friendlyErrors = {
+      429: 'Demasiadas solicitudes. Espera un momento e inténtalo de nuevo.',
+      503: 'El asistente no está disponible temporalmente. Inténtalo en unos segundos.',
+    }
+    const msg = friendlyErrors[response.status]
+      ?? (response.status >= 500
+          ? 'El asistente no está disponible en este momento.'
+          : 'No se pudo procesar la solicitud. Inténtalo de nuevo.')
+    throw new Error(msg)
   }
 
   const data = await response.json()

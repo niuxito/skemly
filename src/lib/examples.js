@@ -8,6 +8,7 @@ import ex07 from '../../examples/07-ecommerce-order-flow.vibe?raw'
 import ex08 from '../../examples/08-mindmap-architecture.vibe?raw'
 import ex09 from '../../examples/09-microservices-saga.vibe?raw'
 import ex10 from '../../examples/10-rag-llm-pipeline.vibe?raw'
+import ex11 from '../../examples/11-economia-edad-media.vibe?raw'
 
 export const EXAMPLES = [
   {
@@ -90,6 +91,14 @@ export const EXAMPLES = [
     theme: 'cyberpunk',
     dsl: ex10,
   },
+  {
+    id: '11',
+    title: 'Economía en la Edad Media',
+    description: 'Sistema feudal, producción agrícola, comercio e iglesia',
+    type: 'Education',
+    theme: 'clean',
+    dsl: ex11,
+  },
 ]
 
 export const TYPE_COLORS = {
@@ -99,6 +108,7 @@ export const TYPE_COLORS = {
   'Pipeline':     'bg-orange-100 text-orange-700',
   'Network':      'bg-red-100 text-red-700',
   'AI / ML':      'bg-pink-100 text-pink-700',
+  'Education':    'bg-yellow-100 text-yellow-700',
 }
 
 export const THEME_COLORS = {
