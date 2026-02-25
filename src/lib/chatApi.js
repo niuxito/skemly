@@ -49,9 +49,20 @@ layout: MM
 [Branch C] -> [Detail C1]
 \`\`\`
 
-### Icon Inference (automatic by keyword)
-- user, db, database, cloud, auth, mail, email, api, server, lb, queue, cache
-- Explicit override: [Node]@icon=name
+### Icon Inference (automatic by keyword in label)
+- user/users/person/people → User icon
+- db/database → Database icon
+- cloud → Cloud icon
+- auth/authentication → Lock icon
+- mail/email → Mail icon
+- api → Plug icon
+- server → Server icon
+- lb/load balancer → GitMerge icon
+- queue → List icon
+- cache → Zap icon
+- internet/web → Globe icon
+- login/signin → LogIn icon
+- Explicit override: [Node]@icon=IconName where IconName is PascalCase Lucide icon (e.g. @icon=User, @icon=Database, @icon=Shield, @icon=Globe, @icon=Cpu, @icon=Smartphone)
 
 ### Example
 \`\`\`

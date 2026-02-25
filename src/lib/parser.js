@@ -355,11 +355,25 @@ export function parseDSL(rawInput) {
           if (['danger', 'safe', 'info', 'warning'].includes(tagStr)) tags.push(tagStr)
         }
 
-        // Parse inner for id|label and @icon
-        let explicitIcon = null
+        // Read optional @icon= outside brackets: [Node]@icon=name
+        let outerIcon = null
+        if (i < len && line[i] === '@') {
+          const m = line.slice(i).match(/^@icon=(\w+)/)
+          if (m) {
+            const raw = m[1]
+            outerIcon = raw.charAt(0).toUpperCase() + raw.slice(1)
+            i += m[0].length
+          }
+        }
+
+        // Parse inner for id|label and optional @icon= inside brackets
+        let explicitIcon = outerIcon
         const iconMatch = inner.match(/@icon=(\w+)$/)
         if (iconMatch) {
-          explicitIcon = iconMatch[1]
+          if (!explicitIcon) {
+            const raw = iconMatch[1]
+            explicitIcon = raw.charAt(0).toUpperCase() + raw.slice(1)
+          }
           inner = inner.slice(0, iconMatch.index).trim()
         }
 
