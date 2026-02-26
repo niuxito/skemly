@@ -367,15 +367,16 @@ export function parseDSL(rawInput) {
           if (['danger', 'safe', 'info', 'warning'].includes(tagStr)) tags.push(tagStr)
         }
 
-        // Read optional @icon= outside brackets: [Node]@icon=name
-        let outerIcon = null
-        if (i < len && line[i] === '@') {
-          const m = line.slice(i).match(/^@icon=(\w+)/)
-          if (m) {
-            const raw = m[1]
-            outerIcon = raw.charAt(0).toUpperCase() + raw.slice(1)
-            i += m[0].length
-          }
+        // Read optional @attr= outside brackets: [Node]@icon=X@bg=Y@color=Z (any order)
+        let outerIcon = null, outerBgColor = null, outerTextColor = null
+        while (i < len && line[i] === '@') {
+          const m = line.slice(i).match(/^@(icon|bg|color)=([\w#]+)/)
+          if (!m) break
+          const [full, attr, val] = m
+          if (attr === 'icon') outerIcon = val.charAt(0).toUpperCase() + val.slice(1)
+          else if (attr === 'bg') outerBgColor = val
+          else if (attr === 'color') outerTextColor = val
+          i += full.length
         }
 
         // Parse inner for id|label and optional @icon= inside brackets
@@ -403,7 +404,10 @@ export function parseDSL(rawInput) {
         const id_key = normalizeId(id)
         const icon = inferIcon(label, explicitIcon)
 
-        nodes.push({ id_key, label, shape, tags, icon, bold, underline })
+        nodes.push({ id_key, label, shape, tags, icon, bold, underline,
+          bgColor: outerBgColor ?? null,
+          textColor: outerTextColor ?? null,
+        })
         return true
       }
 

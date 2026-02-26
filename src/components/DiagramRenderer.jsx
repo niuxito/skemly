@@ -39,9 +39,9 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
   const cy = y + h / 2
 
   const tagStyle = getTagStyle(node.tags || [], theme)
-  const fill = tagStyle?.fill ?? theme.nodeFill
+  const fill = node.bgColor ?? tagStyle?.fill ?? theme.nodeFill
   const stroke = tagStyle?.stroke ?? theme.nodeStroke
-  const textColor = tagStyle?.text ?? theme.nodeText
+  const textColor = node.textColor ?? tagStyle?.text ?? theme.nodeText
 
   const hasIcon = !!node.icon
   const lines = elkNode.lines   // set only for mindmap nodes with >1 line
@@ -244,7 +244,7 @@ function RoughOverlay({ ast, nodeMap, theme, totalW, totalH, canvasRef: external
       const { x = 0, y = 0, width: w, height: h } = en
       const cx = x + w / 2, cy = y + h / 2
       const tagStyle = getTagStyle(node.tags || [], theme)
-      const fill = tagStyle?.fill ?? theme.nodeFill
+      const fill = node.bgColor ?? tagStyle?.fill ?? theme.nodeFill
       const stroke = tagStyle?.stroke ?? theme.nodeStroke
       const opts = { fill, fillStyle: 'solid', stroke, strokeWidth: theme.nodeStrokeWidth, roughness: 1.2, bowing: 0.8 }
 
@@ -561,7 +561,7 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
           const lines = elkNode.lines
           const isMultiLine = lines && lines.length > 1
           const tagStyle = getTagStyle(node.tags || [], theme)
-          const textColor = tagStyle?.text ?? theme.nodeText
+          const textColor = node.textColor ?? tagStyle?.text ?? theme.nodeText
           const textYOffset = hasIcon ? 10 : 0
           const textVis = isEditing ? 'hidden' : 'visible'
           return (

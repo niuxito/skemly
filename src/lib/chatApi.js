@@ -49,6 +49,14 @@ layout: MM
 [Branch C] -> [Detail C1]
 \`\`\`
 
+### Custom Node Colors (optional)
+- Background color: [Node]@bg=#1e293b or [Node]@bg=steelblue
+- Text color: [Node]@color=#ffffff or [Node]@color=white
+- Both together: [Node]@bg=#1e293b@color=#f8fafc
+- Combinable with @icon= in any order: [Node]@icon=Server@bg=#111@color=#0ff
+- Accepts hex (#rrggbb) and CSS named colors (steelblue, tomato, white…)
+- Custom colors override semantic tags (#danger, #safe, etc.) for that property
+
 ### Icon Inference (automatic by keyword in label)
 - user/users/person/people → User icon
 - db/database → Database icon
