@@ -282,6 +282,13 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
   const [zoom, setZoom] = useState(1)
   const dragging = useRef(false)
   const lastMouse = useRef(null)
+  const zoomRef = useRef(1)
+  const panRef = useRef({ x: 20, y: 20 })
+  const lastTouches = useRef(null)
+
+  // Keep refs in sync for use in non-React event handlers
+  useEffect(() => { zoomRef.current = zoom }, [zoom])
+  useEffect(() => { panRef.current = pan }, [pan])
 
   // ─── Inline editing state ──────────────────────────────────────────────────
   const [editingNodeId, setEditingNodeId] = useState(null)
@@ -412,10 +419,90 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
     setPan(p => ({ x: p.x + dx, y: p.y + dy }))
   }
   const onMouseUp = () => { dragging.current = false }
+
+  // Cursor-centered wheel zoom, slower factor
   const onWheel = (e) => {
     e.preventDefault()
-    setZoom(z => Math.max(0.1, Math.min(4, z * (e.deltaY > 0 ? 0.9 : 1.1))))
+    const factor = e.deltaY > 0 ? 0.95 : 1.05
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const cx = e.clientX - rect.left
+    const cy = e.clientY - rect.top
+    const z = zoomRef.current
+    const p = panRef.current
+    const newZ = Math.max(0.1, Math.min(4, z * factor))
+    setZoom(newZ)
+    setPan({ x: cx - (cx - p.x) * (newZ / z), y: cy - (cy - p.y) * (newZ / z) })
   }
+
+  // Touch: one finger = pan, two fingers = pinch zoom
+  const onTouchStart = (e) => {
+    if (editingNodeId) return
+    const touches = Array.from(e.touches)
+    lastTouches.current = {
+      touches,
+      dist: touches.length >= 2
+        ? Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY)
+        : null,
+    }
+  }
+  const onTouchEnd = () => { lastTouches.current = null }
+
+  // touchmove must be non-passive to call preventDefault (prevent page zoom on tablet)
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const handler = (e) => {
+      if (!lastTouches.current) return
+      e.preventDefault()
+      const touches = Array.from(e.touches)
+      const prev = lastTouches.current
+      if (touches.length === 1 && prev.touches.length === 1) {
+        const dx = touches[0].clientX - prev.touches[0].clientX
+        const dy = touches[0].clientY - prev.touches[0].clientY
+        setPan(p => ({ x: p.x + dx, y: p.y + dy }))
+      } else if (touches.length >= 2) {
+        const newDist = Math.hypot(
+          touches[0].clientX - touches[1].clientX,
+          touches[0].clientY - touches[1].clientY,
+        )
+        if (prev.dist) {
+          const factor = newDist / prev.dist
+          const midX = (touches[0].clientX + touches[1].clientX) / 2
+          const midY = (touches[0].clientY + touches[1].clientY) / 2
+          const rect = el.getBoundingClientRect()
+          const cx = midX - rect.left
+          const cy = midY - rect.top
+          const z = zoomRef.current
+          const p = panRef.current
+          const newZ = Math.max(0.1, Math.min(4, z * factor))
+          setZoom(newZ)
+          setPan({ x: cx - (cx - p.x) * (newZ / z), y: cy - (cy - p.y) * (newZ / z) })
+        }
+      }
+      lastTouches.current = {
+        touches,
+        dist: touches.length >= 2
+          ? Math.hypot(touches[0].clientX - touches[1].clientX, touches[0].clientY - touches[1].clientY)
+          : null,
+      }
+    }
+    el.addEventListener('touchmove', handler, { passive: false })
+    return () => el.removeEventListener('touchmove', handler)
+  }, [elkLayout]) // re-attach when main container mounts
+
+  // Zoom buttons: zoom around viewport center
+  const zoomBy = useCallback((factor) => {
+    const rect = containerRef.current?.getBoundingClientRect()
+    if (!rect) return
+    const cx = rect.width / 2
+    const cy = rect.height / 2
+    const z = zoomRef.current
+    const p = panRef.current
+    const newZ = Math.max(0.1, Math.min(4, z * factor))
+    setZoom(newZ)
+    setPan({ x: cx - (cx - p.x) * (newZ / z), y: cy - (cy - p.y) * (newZ / z) })
+  }, [])
 
   if (!ast || !elkLayout || !nodeMap) {
     return (
@@ -429,16 +516,34 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
   return (
     <div ref={containerRef}
       className="relative w-full h-full overflow-hidden select-none"
-      style={{ background: theme.canvasBg, cursor: dragging.current ? 'grabbing' : 'grab' }}
+      style={{ background: theme.canvasBg, cursor: dragging.current ? 'grabbing' : 'grab', touchAction: 'none' }}
       onMouseDown={onMouseDown} onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onWheel={onWheel}>
+      onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onWheel={onWheel}
+      onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
 
-      <button
-        className="absolute top-3 right-3 z-10 px-2 py-1 rounded text-xs opacity-70 hover:opacity-100 transition-opacity"
-        style={{ background: theme.nodeFill, color: theme.nodeText, border: `1px solid ${theme.nodeStroke}`, fontFamily: theme.font }}
-        onClick={fitView} onMouseDown={e => e.stopPropagation()}>
-        Fit
-      </button>
+      {/* Zoom controls */}
+      <div
+        className="absolute top-3 right-3 z-10 flex items-stretch rounded overflow-hidden opacity-70 hover:opacity-100 transition-opacity"
+        style={{ border: `1px solid ${theme.nodeStroke}`, fontFamily: theme.font }}
+        onMouseDown={e => e.stopPropagation()}
+      >
+        {[['−', 0.8], ['+', 1.25]].map(([label, factor]) => (
+          <button key={label} onClick={() => zoomBy(factor)}
+            className="px-2 py-1 text-xs transition-colors hover:brightness-90"
+            style={{ background: theme.nodeFill, color: theme.nodeText, borderRight: `1px solid ${theme.nodeStroke}` }}>
+            {label}
+          </button>
+        ))}
+        <span className="px-2 py-1 text-xs cursor-default select-none"
+          style={{ background: theme.nodeFill, color: theme.nodeText, minWidth: '3rem', textAlign: 'center', borderRight: `1px solid ${theme.nodeStroke}` }}>
+          {Math.round(zoom * 100)}%
+        </span>
+        <button onClick={fitView}
+          className="px-2 py-1 text-xs transition-colors hover:brightness-90"
+          style={{ background: theme.nodeFill, color: theme.nodeText }}>
+          Fit
+        </button>
+      </div>
 
       {/* Rough canvas — rendered BEFORE the SVG so shapes stay behind text/edges */}
       {theme.rough && nodeMap && (
