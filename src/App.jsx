@@ -4,8 +4,9 @@ import { useLayout } from './lib/useLayout.js'
 import { THEMES } from './lib/themes.js'
 import DiagramRenderer from './components/DiagramRenderer.jsx'
 import ExamplesPanel from './components/ExamplesPanel.jsx'
+import DslReferencePanel from './components/DslReferencePanel.jsx'
 import ChatPanel from './components/ChatPanel.jsx'
-import { Download, Copy, Check, AlertTriangle, BookOpen, MessageSquare, Code2, Trash2, Plus, ChevronDown, Link, Edit2 } from 'lucide-react'
+import { Download, Copy, Check, AlertTriangle, BookOpen, MessageSquare, Code2, Trash2, Plus, ChevronDown, Link, Edit2, HelpCircle } from 'lucide-react'
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
 const SESSIONS_KEY = 'vibediag_sessions'
@@ -90,6 +91,15 @@ function rewriteNodeLabel(dsl, idKey, oldLabel, newLabel) {
   return result
 }
 
+function toFilename(title) {
+  const clean = (title ?? '')
+    .replace(/[^\w\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '_')
+    .toLowerCase()
+  return clean || 'vibediagram'
+}
+
 function relativeTime(ts) {
   const diff = Date.now() - ts
   if (diff < 60_000) return 'just now'
@@ -170,6 +180,7 @@ export default function App() {
   const [shared, setShared] = useState(false)
   const [remainingRequests, setRemainingRequests] = useState(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
+  const [dslRefOpen, setDslRefOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('editor')
   const svgRef = useRef(null)
   const canvasRef = useRef(null)
@@ -397,7 +408,7 @@ export default function App() {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'vibediagram.svg'
+    a.download = `${toFilename(currentSession?.title)}.svg`
     a.click()
     URL.revokeObjectURL(url)
   }, [ast])
@@ -440,7 +451,7 @@ export default function App() {
       URL.revokeObjectURL(url)
       const a = document.createElement('a')
       a.href = exportCanvas.toDataURL('image/png')
-      a.download = 'vibediagram.png'
+      a.download = `${toFilename(currentSession?.title)}.png`
       a.click()
     }
     img.onerror = () => URL.revokeObjectURL(url)
@@ -668,14 +679,24 @@ export default function App() {
               <span className="opacity-40">
                 {ast?.nodes?.length ?? 0} nodes · {ast?.edges?.length ?? 0} edges · {ast?.groups?.length ?? 0} groups
               </span>
-              <button
-                onClick={() => updateCurrentSession({ dsl: '' })}
-                className={`flex items-center gap-1 opacity-40 hover:opacity-80 transition-opacity`}
-                title="Clear DSL"
-              >
-                <Trash2 size={11} />
-                Clear
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setDslRefOpen(true)}
+                  className={`flex items-center gap-1 opacity-40 hover:opacity-80 transition-opacity`}
+                  title="Referencia DSL"
+                >
+                  <HelpCircle size={11} />
+                  Referencia
+                </button>
+                <button
+                  onClick={() => updateCurrentSession({ dsl: '' })}
+                  className={`flex items-center gap-1 opacity-40 hover:opacity-80 transition-opacity`}
+                  title="Clear DSL"
+                >
+                  <Trash2 size={11} />
+                  Clear
+                </button>
+              </div>
             </div>
           </div>
 
@@ -706,6 +727,12 @@ export default function App() {
           />
         </div>
       </div>
+
+      <DslReferencePanel
+        open={dslRefOpen}
+        onClose={() => setDslRefOpen(false)}
+        theme={themeName}
+      />
 
       <ExamplesPanel
         open={examplesOpen}
