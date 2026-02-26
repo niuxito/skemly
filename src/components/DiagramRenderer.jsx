@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import rough from 'roughjs'
 import { THEMES } from '../lib/themes.js'
 import * as LucideIcons from 'lucide-react'
+import { Maximize2, Minimize2 } from 'lucide-react'
 
 const ICON_SIZE = 18
 
@@ -491,6 +492,24 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
     return () => el.removeEventListener('touchmove', handler)
   }, [elkLayout]) // re-attach when main container mounts
 
+  // Fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false)
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', handler)
+    return () => document.removeEventListener('fullscreenchange', handler)
+  }, [])
+
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenEnabled) return
+    if (document.fullscreenElement) {
+      document.exitFullscreen()
+    } else {
+      containerRef.current?.requestFullscreen()
+    }
+  }, [])
+
   // Zoom buttons: zoom around viewport center
   const zoomBy = useCallback((factor) => {
     const rect = containerRef.current?.getBoundingClientRect()
@@ -540,9 +559,17 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
         </span>
         <button onClick={fitView}
           className="px-2 py-1 text-xs transition-colors hover:brightness-90"
-          style={{ background: theme.nodeFill, color: theme.nodeText }}>
+          style={{ background: theme.nodeFill, color: theme.nodeText, borderRight: document.fullscreenEnabled ? `1px solid ${theme.nodeStroke}` : undefined }}>
           Fit
         </button>
+        {document.fullscreenEnabled && (
+          <button onClick={toggleFullscreen}
+            className="px-2 py-1 text-xs transition-colors hover:brightness-90 flex items-center"
+            style={{ background: theme.nodeFill, color: theme.nodeText }}
+            title={isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}>
+            {isFullscreen ? <Minimize2 size={11} /> : <Maximize2 size={11} />}
+          </button>
+        )}
       </div>
 
       {/* Rough canvas — rendered BEFORE the SVG so shapes stay behind text/edges */}
