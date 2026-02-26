@@ -9,6 +9,7 @@ import ex08 from '../../examples/08-mindmap-architecture.vibe?raw'
 import ex09 from '../../examples/09-microservices-saga.vibe?raw'
 import ex10 from '../../examples/10-rag-llm-pipeline.vibe?raw'
 import ex11 from '../../examples/11-economia-edad-media.vibe?raw'
+import ex12 from '../../examples/12-fases-lunares.vibe?raw'
 
 export const EXAMPLES = [
   {
@@ -98,6 +99,14 @@ export const EXAMPLES = [
     type: 'Education',
     theme: 'clean',
     dsl: ex11,
+  },
+  {
+    id: '12',
+    title: 'Fases Lunares',
+    description: 'Ciclo lunar completo con colores personalizados por fase',
+    type: 'Education',
+    theme: 'clean',
+    dsl: ex12,
   },
 ]
 

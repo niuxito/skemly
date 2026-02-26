@@ -1,0 +1,20 @@
+vibe: clean
+layout: LR
+
+[luna nueva|🌑 Luna Nueva]@bg=#0f0f1a@color=#ffffff -> [creciente iluminante|🌒 Creciente\nIluminante]@bg=#1a1a2e@color=#c8c8ff -> [cuarto creciente|🌓 Cuarto\nCreciente]@bg=#2d2d5e@color=#d4d4ff -> [gibosa creciente|🌔 Gibosa\nCreciente]@bg=#4a3f8a@color=#e8e0ff -> [luna llena|🌕 Luna Llena]@bg=#fffacd@color=#1a1a00 -> [gibosa menguante|🌖 Gibosa\nMenguante]@bg=#c8a84b@color=#1a1000 -> [cuarto menguante|🌗 Cuarto\nMenguante]@bg=#8a6a1a@color=#fff8dc -> [creciente menguante|🌘 Creciente\nMenguante]@bg=#3d2a0a@color=#ffd700
+
+group "🌙 Fase Creciente" #info {
+  [luna nueva|🌑 Luna Nueva]@bg=#0f0f1a@color=#ffffff
+  [creciente iluminante|🌒 Creciente\nIluminante]@bg=#1a1a2e@color=#c8c8ff
+  [cuarto creciente|🌓 Cuarto\nCreciente]@bg=#2d2d5e@color=#d4d4ff
+  [gibosa creciente|🌔 Gibosa\nCreciente]@bg=#4a3f8a@color=#e8e0ff
+}
+
+group "☀️ Fase Menguante" #warning {
+  [luna llena|🌕 Luna Llena]@bg=#fffacd@color=#1a1a00
+  [gibosa menguante|🌖 Gibosa\nMenguante]@bg=#c8a84b@color=#1a1000
+  [cuarto menguante|🌗 Cuarto\nMenguante]@bg=#8a6a1a@color=#fff8dc
+  [creciente menguante|🌘 Creciente\nMenguante]@bg=#3d2a0a@color=#ffd700
+}
+
+[creciente menguante|🌘 Creciente\nMenguante]@bg=#3d2a0a@color=#ffd700 -> "Nuevo ciclo" -> [luna nueva|🌑 Luna Nueva]@bg=#0f0f1a@color=#ffffff
