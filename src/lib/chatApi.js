@@ -107,7 +107,7 @@ export function looksLikeDsl(text) {
   return /[\[\]()<>?]|^(vibe|layout|spacing|edgeLabels|group)\s*:/m.test(text)
 }
 
-export async function callClaude(userMessage, chatHistory, currentDsl) {
+export async function callClaude(userMessage, chatHistory, currentDsl, attachment = null) {
   const contextBlock = currentDsl
     ? `Current diagram DSL:\n\`\`\`\n${currentDsl}\n\`\`\`\n\n`
     : ''
@@ -119,22 +119,26 @@ export async function callClaude(userMessage, chatHistory, currentDsl) {
     { role: 'user', content: augmentedMessage },
   ]
 
+  const body = {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 2048,
+    system: SYSTEM_PROMPT,
+    messages,
+    ...(attachment ? { attachment } : {}),
+  }
+
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
-      system: SYSTEM_PROMPT,
-      messages,
-    }),
+    body: JSON.stringify(body),
   })
 
   if (!response.ok) {
     // Special handling for our IP rate limit 429
-    if (response.status === 429) {
+    if (response.status === 429 || response.status === 400) {
       let errBody
       try { errBody = await response.json() } catch { /* ignore */ }
+
       if (errBody?.error?.type === 'rate_limit_exceeded') {
         const resetAt = new Date(errBody.error.reset_at)
         const diffMs = resetAt - Date.now()
@@ -144,6 +148,21 @@ export async function callClaude(userMessage, chatHistory, currentDsl) {
         throw new Error(
           `Has alcanzado el límite diario (${errBody.error.limit} solicitudes). Podrás volver a usar el asistente a las 00:00 UTC (en ${timeStr}).`
         )
+      }
+
+      if (errBody?.error?.type === 'file_rate_limit_exceeded') {
+        const resetAt = new Date(errBody.error.reset_at)
+        const diffMs = resetAt - Date.now()
+        const diffH = Math.floor(diffMs / 3_600_000)
+        const diffM = Math.floor((diffMs % 3_600_000) / 60_000)
+        const timeStr = diffH > 0 ? `${diffH}h ${diffM}m` : `${diffM}m`
+        throw new Error(
+          `Has alcanzado el límite diario de ficheros adjuntos (${errBody.error.limit}/día). Podrás adjuntar más a las 00:00 UTC (en ${timeStr}).`
+        )
+      }
+
+      if (errBody?.error?.type === 'file_too_large') {
+        throw new Error(errBody.error.message)
       }
     }
 

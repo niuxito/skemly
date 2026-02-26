@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { callClaude, looksLikeDsl } from '../lib/chatApi.js'
-import { Send, RotateCcw, AlertCircle, Bot, User } from 'lucide-react'
+import { Send, RotateCcw, AlertCircle, Bot, User, Paperclip, X, FileText, Image } from 'lucide-react'
+
+const FILE_MAX_SIZE = 2 * 1024 * 1024 // 2 MB — must match server default
+const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,application/json'
 
 const THEME_TOKENS = {
   clean: {
@@ -9,12 +12,15 @@ const THEME_TOKENS = {
     subtext: 'text-slate-500',
     input: 'bg-white border-slate-300 text-slate-900 placeholder-slate-400 focus:border-slate-500',
     sendBtn: 'bg-slate-800 text-white hover:bg-slate-700 disabled:bg-slate-300',
+    attachBtn: 'text-slate-400 hover:text-slate-600 hover:bg-slate-100',
     userBubble: 'bg-slate-800 text-white',
     assistantBubble: 'bg-slate-100 text-slate-900',
     errorBubble: 'bg-red-50 text-red-700 border border-red-200',
     code: 'bg-slate-800 text-green-400',
     reapplyBtn: 'bg-slate-600 text-white hover:bg-slate-500 text-xs px-2 py-1 rounded',
     border: 'border-slate-200',
+    pill: 'bg-slate-200 text-slate-700',
+    pillRemove: 'hover:bg-slate-300',
   },
   handdrawn: {
     bg: 'bg-amber-50',
@@ -22,12 +28,15 @@ const THEME_TOKENS = {
     subtext: 'text-stone-500',
     input: 'bg-amber-100 border-amber-300 text-stone-900 placeholder-stone-400 focus:border-amber-500',
     sendBtn: 'bg-stone-800 text-white hover:bg-stone-700 disabled:bg-stone-300',
+    attachBtn: 'text-stone-400 hover:text-stone-600 hover:bg-amber-200',
     userBubble: 'bg-stone-800 text-white',
     assistantBubble: 'bg-amber-100 text-stone-900',
     errorBubble: 'bg-red-50 text-red-700 border border-red-200',
     code: 'bg-stone-800 text-amber-300',
     reapplyBtn: 'bg-stone-600 text-white hover:bg-stone-500 text-xs px-2 py-1 rounded',
     border: 'border-amber-200',
+    pill: 'bg-amber-200 text-stone-700',
+    pillRemove: 'hover:bg-amber-300',
   },
   cyberpunk: {
     bg: 'bg-gray-950',
@@ -35,21 +44,46 @@ const THEME_TOKENS = {
     subtext: 'text-cyan-600',
     input: 'bg-gray-900 border-cyan-800 text-cyan-100 placeholder-cyan-700 focus:border-cyan-500',
     sendBtn: 'bg-cyan-500 text-black hover:bg-cyan-400 disabled:bg-cyan-900 disabled:text-cyan-700',
+    attachBtn: 'text-cyan-700 hover:text-cyan-400 hover:bg-gray-800',
     userBubble: 'bg-cyan-900 text-cyan-100',
     assistantBubble: 'bg-gray-900 text-cyan-200',
     errorBubble: 'bg-red-950 text-red-400 border border-red-800',
     code: 'bg-gray-950 text-green-400',
     reapplyBtn: 'bg-cyan-700 text-black hover:bg-cyan-600 text-xs px-2 py-1 rounded',
     border: 'border-cyan-900',
+    pill: 'bg-cyan-900 text-cyan-300',
+    pillRemove: 'hover:bg-cyan-800',
   },
+}
+
+function AttachmentPill({ name, mediaType, onRemove, tk }) {
+  const isImage = mediaType?.startsWith('image/')
+  const Icon = isImage ? Image : FileText
+  return (
+    <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs max-w-[200px] ${tk.pill}`}>
+      <Icon size={11} className="shrink-0" />
+      <span className="truncate">{name}</span>
+      {onRemove && (
+        <button
+          onClick={onRemove}
+          className={`shrink-0 rounded-full p-0.5 transition-colors ${tk.pillRemove}`}
+        >
+          <X size={10} />
+        </button>
+      )}
+    </div>
+  )
 }
 
 function MessageBubble({ msg, onReapply, onRetry, tk }) {
   if (msg.role === 'user') {
     return (
       <div className="flex justify-end gap-2 items-start">
-        <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap ${tk.userBubble}`}>
-          {msg.content}
+        <div className={`max-w-[85%] rounded-lg px-3 py-2 text-sm space-y-1.5 ${tk.userBubble}`}>
+          {msg.attachment && (
+            <AttachmentPill name={msg.attachment.name} mediaType={msg.attachment.mediaType} tk={tk} />
+          )}
+          <p className="whitespace-pre-wrap">{msg.content}</p>
         </div>
         <User size={16} className={`mt-1 shrink-0 ${tk.subtext}`} />
       </div>
@@ -105,11 +139,36 @@ function MessageBubble({ msg, onReapply, onRetry, tk }) {
   )
 }
 
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      // result is "data:<mediaType>;base64,<data>" — strip the prefix
+      const b64 = reader.result.split(',')[1]
+      resolve(b64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
+
+function readFileAsText(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsText(file)
+  })
+}
+
 export default function ChatPanel({ messages, chatHistory, onMessagesChange, onDslUpdate, currentDsl, theme, remainingRequests, onRemainingChange }) {
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [attachment, setAttachment] = useState(null) // { name, mediaType, data/text, size, isText }
+  const [attachError, setAttachError] = useState(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
+  const fileInputRef = useRef(null)
 
   const tk = THEME_TOKENS[theme] ?? THEME_TOKENS.clean
 
@@ -121,18 +180,59 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
     onDslUpdate(dsl)
   }, [onDslUpdate])
 
+  const handleFileChange = useCallback(async (e) => {
+    const file = e.target.files?.[0]
+    if (!e.target) return
+    e.target.value = '' // reset so same file can be re-selected
+    if (!file) return
+
+    setAttachError(null)
+
+    if (file.size > FILE_MAX_SIZE) {
+      setAttachError(`El fichero es demasiado grande (máx. ${Math.round(FILE_MAX_SIZE / 1024 / 1024)} MB).`)
+      return
+    }
+
+    const isText = file.type.startsWith('text/') || file.type === 'application/json'
+
+    try {
+      if (isText) {
+        const text = await readFileAsText(file)
+        setAttachment({ name: file.name, mediaType: file.type || 'text/plain', text, size: file.size, isText: true })
+      } else {
+        const data = await readFileAsBase64(file)
+        setAttachment({ name: file.name, mediaType: file.type, data, size: file.size, isText: false })
+      }
+    } catch {
+      setAttachError('No se pudo leer el fichero.')
+    }
+  }, [])
+
+  const clearAttachment = useCallback(() => {
+    setAttachment(null)
+    setAttachError(null)
+  }, [])
+
   const handleSend = useCallback(async () => {
     const text = input.trim()
     if (!text || loading) return
 
-    const userMsg = { id: Date.now(), role: 'user', content: text }
+    const currentAttachment = attachment
+    const userMsg = {
+      id: Date.now(),
+      role: 'user',
+      content: text,
+      attachment: currentAttachment ? { name: currentAttachment.name, mediaType: currentAttachment.mediaType } : null,
+    }
     const newMessages = [...messages, userMsg]
-    onMessagesChange(newMessages, chatHistory) // optimistic user bubble
+    onMessagesChange(newMessages, chatHistory)
     setInput('')
+    setAttachment(null)
+    setAttachError(null)
     setLoading(true)
 
     try {
-      const { dsl: result, remaining } = await callClaude(text, chatHistory, currentDsl)
+      const { dsl: result, remaining } = await callClaude(text, chatHistory, currentDsl, currentAttachment)
       const isDsl = looksLikeDsl(result)
 
       const assistantMsg = {
@@ -166,7 +266,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
     } finally {
       setLoading(false)
     }
-  }, [input, loading, messages, chatHistory, currentDsl, onDslUpdate, onMessagesChange])
+  }, [input, loading, messages, chatHistory, currentDsl, attachment, onDslUpdate, onMessagesChange])
 
   const handleRetry = useCallback(async (retryText, errorMsgId) => {
     if (loading) return
@@ -232,7 +332,41 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
 
       {/* Input */}
       <div className={`border-t px-3 py-2 ${tk.border}`}>
+        {/* Attachment pill */}
+        {attachment && (
+          <div className="mb-1.5">
+            <AttachmentPill
+              name={attachment.name}
+              mediaType={attachment.mediaType}
+              onRemove={clearAttachment}
+              tk={tk}
+            />
+          </div>
+        )}
+        {/* Attach error */}
+        {attachError && (
+          <p className="text-xs text-red-500 mb-1">{attachError}</p>
+        )}
+
         <div className="flex gap-2 items-end">
+          {/* Hidden file input */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_TYPES}
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          {/* Attach button */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={loading || !!attachment}
+            title="Adjuntar fichero (imágenes, PDF, texto)"
+            className={`shrink-0 p-2 rounded transition-colors disabled:opacity-30 ${tk.attachBtn}`}
+          >
+            <Paperclip size={14} />
+          </button>
+
           <textarea
             ref={textareaRef}
             value={input}
