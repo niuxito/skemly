@@ -1,11 +1,12 @@
-import { useEffect, useRef } from 'react'
-import { X, BookOpen } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { X, BookOpen, Link } from 'lucide-react'
 import { EXAMPLES, TYPE_COLORS, THEME_COLORS } from '../lib/examples.js'
 
 const THEME_ICON = { clean: '☀️', handdrawn: '✏️', cyberpunk: '⚡' }
 
 export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
   const panelRef = useRef(null)
+  const [copiedSlug, setCopiedSlug] = useState(null)
 
   // Close on Escape
   useEffect(() => {
@@ -69,13 +70,29 @@ export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
         <div className="overflow-y-auto p-4" style={{ maxHeight: 'calc(100vh - 14rem)' }}>
           <div className="grid grid-cols-2 gap-3">
             {EXAMPLES.map((ex) => (
-              <button
+              <div
                 key={ex.id}
+                className={`group relative rounded-lg border p-4 transition-all shadow-sm hover:shadow-md cursor-pointer ${cardBg}`}
                 onClick={() => { onLoad(ex.dsl); onClose() }}
-                className={`text-left rounded-lg border p-4 transition-all shadow-sm hover:shadow-md ${cardBg}`}
               >
+                {/* Copy link button */}
+                <button
+                  onClick={e => {
+                    e.stopPropagation()
+                    const url = `${window.location.origin}/examples/${ex.slug}`
+                    navigator.clipboard.writeText(url).then(() => {
+                      setCopiedSlug(ex.slug)
+                      setTimeout(() => setCopiedSlug(null), 2000)
+                    })
+                  }}
+                  className={`absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity ${closeBg}`}
+                  title="Copiar enlace"
+                >
+                  <Link size={11} />
+                </button>
+
                 {/* Number + badges */}
-                <div className="flex items-start justify-between gap-2 mb-2">
+                <div className="flex items-start justify-between gap-2 mb-2 pr-4">
                   <span className={`text-xs font-mono opacity-40 ${cardTitle}`}>{ex.id}</span>
                   <div className="flex items-center gap-1 flex-wrap justify-end">
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${TYPE_COLORS[ex.type] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -92,7 +109,14 @@ export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
 
                 {/* Description */}
                 <div className={`text-xs leading-relaxed ${cardDesc}`}>{ex.description}</div>
-              </button>
+
+                {/* Copied feedback */}
+                {copiedSlug === ex.slug && (
+                  <div className={`absolute bottom-2 right-2 text-xs px-2 py-0.5 rounded ${TYPE_COLORS['Flowchart']}`}>
+                    ¡Copiado!
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         </div>

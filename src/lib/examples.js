@@ -14,6 +14,7 @@ import ex12 from '../../examples/12-fases-lunares.vibe?raw'
 export const EXAMPLES = [
   {
     id: '01',
+    slug: 'cloud-architecture',
     title: 'Cloud Architecture',
     description: 'E-commerce con CDN, microservicios y data layer',
     type: 'Architecture',
@@ -22,6 +23,7 @@ export const EXAMPLES = [
   },
   {
     id: '02',
+    slug: 'mindmap-product',
     title: 'Mind Map — Producto',
     description: 'Estrategia de producto con temas y sub-temas',
     type: 'Mind Map',
@@ -30,6 +32,7 @@ export const EXAMPLES = [
   },
   {
     id: '03',
+    slug: 'auth-flow',
     title: 'Auth Flow (MFA)',
     description: 'Autenticación multifactor con bloqueo de cuenta',
     type: 'Flowchart',
@@ -38,6 +41,7 @@ export const EXAMPLES = [
   },
   {
     id: '04',
+    slug: 'cicd-pipeline',
     title: 'CI/CD Pipeline',
     description: 'De commit a producción con quality gate y rollback',
     type: 'Pipeline',
@@ -46,6 +50,7 @@ export const EXAMPLES = [
   },
   {
     id: '05',
+    slug: 'network-topology',
     title: 'Network Topology',
     description: 'DMZ, zona de aplicación y zona de datos segmentadas',
     type: 'Network',
@@ -54,6 +59,7 @@ export const EXAMPLES = [
   },
   {
     id: '06',
+    slug: 'data-pipeline',
     title: 'Data Pipeline',
     description: 'Ingesta, procesamiento y serving en tiempo real',
     type: 'Pipeline',
@@ -62,6 +68,7 @@ export const EXAMPLES = [
   },
   {
     id: '07',
+    slug: 'order-lifecycle',
     title: 'Order Lifecycle',
     description: 'Ciclo de vida de un pedido e-commerce con reenvío',
     type: 'Flowchart',
@@ -70,6 +77,7 @@ export const EXAMPLES = [
   },
   {
     id: '08',
+    slug: 'mindmap-system-design',
     title: 'Mind Map — System Design',
     description: 'Mapa de conocimiento de diseño de sistemas',
     type: 'Mind Map',
@@ -78,6 +86,7 @@ export const EXAMPLES = [
   },
   {
     id: '09',
+    slug: 'saga-pattern',
     title: 'Saga Pattern',
     description: 'Transacción distribuida con acciones compensatorias',
     type: 'Architecture',
@@ -86,6 +95,7 @@ export const EXAMPLES = [
   },
   {
     id: '10',
+    slug: 'rag-llm-pipeline',
     title: 'RAG / LLM Pipeline',
     description: 'Pipeline de recuperación y generación aumentada',
     type: 'AI / ML',
@@ -94,6 +104,7 @@ export const EXAMPLES = [
   },
   {
     id: '11',
+    slug: 'economia-edad-media',
     title: 'Economía en la Edad Media',
     description: 'Sistema feudal, producción agrícola, comercio e iglesia',
     type: 'Education',
@@ -102,6 +113,7 @@ export const EXAMPLES = [
   },
   {
     id: '12',
+    slug: 'fases-lunares',
     title: 'Fases Lunares',
     description: 'Ciclo lunar completo con colores personalizados por fase',
     type: 'Education',
@@ -109,6 +121,10 @@ export const EXAMPLES = [
     dsl: ex12,
   },
 ]
+
+export function getExampleBySlug(slug) {
+  return EXAMPLES.find(e => e.slug === slug) ?? null
+}
 
 export const TYPE_COLORS = {
   'Architecture': 'bg-blue-100 text-blue-700',

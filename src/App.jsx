@@ -4,6 +4,7 @@ import { useLayout } from './lib/useLayout.js'
 import { THEMES } from './lib/themes.js'
 import DiagramRenderer from './components/DiagramRenderer.jsx'
 import ExamplesPanel from './components/ExamplesPanel.jsx'
+import { getExampleBySlug } from './lib/examples.js'
 import DslReferencePanel from './components/DslReferencePanel.jsx'
 import ChatPanel from './components/ChatPanel.jsx'
 import { Download, Copy, Check, AlertTriangle, BookOpen, MessageSquare, Code2, Trash2, Plus, ChevronDown, Link, Edit2, HelpCircle } from 'lucide-react'
@@ -257,6 +258,19 @@ export default function App() {
   useEffect(() => {
     if (activeSessionId) localStorage.setItem(ACTIVE_KEY, activeSessionId)
   }, [activeSessionId])
+
+  // ─── Load example via /examples/:slug URL ────────────────────────────────
+  useEffect(() => {
+    const match = window.location.pathname.match(/^\/examples\/([^/]+)\/?$/)
+    if (!match) return
+    const ex = getExampleBySlug(match[1])
+    window.history.replaceState(null, '', '/')
+    if (!ex) return
+    const s = createSession(ex.dsl)
+    s.title = ex.title
+    setSessions(prev => [s, ...prev])
+    setActiveSessionId(s.id)
+  }, []) // runs once on mount
 
   // ─── Shared DSL via URL hash ──────────────────────────────────────────────
   useEffect(() => {
