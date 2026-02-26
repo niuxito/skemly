@@ -97,6 +97,7 @@ function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, f
 
         // ─── Proxy to Anthropic ─────────────────────────────────────────────
         const anthropicBody = JSON.stringify(buildAnthropicBody(parsedBody))
+        const isPdf = parsedBody.attachment?.mediaType === 'application/pdf'
 
         const proxyReq = httpsRequest(
           {
@@ -108,6 +109,7 @@ function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, f
               'Content-Length': Buffer.byteLength(anthropicBody),
               'x-api-key': apiKey,
               'anthropic-version': '2023-06-01',
+              ...(isPdf ? { 'anthropic-beta': 'pdfs-2024-09-25' } : {}),
             },
           },
           proxyRes => {

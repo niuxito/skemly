@@ -98,7 +98,7 @@ function MessageBubble({ msg, onReapply, onRetry, tk }) {
           <span>{msg.content}</span>
           {msg.retryText && (
             <button
-              onClick={() => onRetry?.(msg.retryText, msg.id)}
+              onClick={() => onRetry?.(msg.retryText, msg.id, msg.retryAttachment)}
               className="shrink-0 flex items-center gap-1 text-xs underline opacity-70 hover:opacity-100 transition-opacity"
             >
               <RotateCcw size={10} />
@@ -260,7 +260,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
         errorText = err.message
       }
       onMessagesChange(
-        [...newMessages, { id: Date.now() + 2, role: 'error', content: errorText, retryText: text }],
+        [...newMessages, { id: Date.now() + 2, role: 'error', content: errorText, retryText: text, retryAttachment: currentAttachment }],
         chatHistory
       )
     } finally {
@@ -268,13 +268,13 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
     }
   }, [input, loading, messages, chatHistory, currentDsl, attachment, onDslUpdate, onMessagesChange])
 
-  const handleRetry = useCallback(async (retryText, errorMsgId) => {
+  const handleRetry = useCallback(async (retryText, errorMsgId, retryAttachment) => {
     if (loading) return
     const messagesWithoutError = messages.filter(m => m.id !== errorMsgId)
     onMessagesChange(messagesWithoutError, chatHistory)
     setLoading(true)
     try {
-      const { dsl: result, remaining } = await callClaude(retryText, chatHistory, currentDsl)
+      const { dsl: result, remaining } = await callClaude(retryText, chatHistory, currentDsl, retryAttachment ?? null)
       const isDsl = looksLikeDsl(result)
       const assistantMsg = { id: Date.now(), role: 'assistant', content: result, isDsl }
       const newHistory = [
@@ -290,7 +290,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
       if (err instanceof TypeError) errorText = 'Network error — check your connection'
       else if (err?.message) errorText = err.message
       onMessagesChange(
-        [...messagesWithoutError, { id: Date.now(), role: 'error', content: errorText, retryText }],
+        [...messagesWithoutError, { id: Date.now(), role: 'error', content: errorText, retryText, retryAttachment }],
         chatHistory
       )
     } finally {

@@ -81,12 +81,14 @@ export default async function handler(req, res) {
   try {
     const anthropicBody = buildAnthropicBody(req.body)
 
+    const isPdf = attachment?.mediaType === 'application/pdf'
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        ...(isPdf ? { 'anthropic-beta': 'pdfs-2024-09-25' } : {}),
       },
       body: JSON.stringify(anthropicBody),
     })
