@@ -5,7 +5,7 @@ import { THEMES } from './lib/themes.js'
 import DiagramRenderer from './components/DiagramRenderer.jsx'
 import ExamplesPanel from './components/ExamplesPanel.jsx'
 import ChatPanel from './components/ChatPanel.jsx'
-import { Download, Copy, Check, AlertTriangle, BookOpen, MessageSquare, Code2, Trash2, Plus, ChevronDown, Link } from 'lucide-react'
+import { Download, Copy, Check, AlertTriangle, BookOpen, MessageSquare, Code2, Trash2, Plus, ChevronDown, Link, Edit2 } from 'lucide-react'
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
 const SESSIONS_KEY = 'vibediag_sessions'
@@ -160,6 +160,8 @@ export default function App() {
     return null
   })
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [editingSessionTitle, setEditingSessionTitle] = useState(false)
+  const [sessionTitleDraft, setSessionTitleDraft] = useState('')
   const historyRef = useRef(null)
 
   // ─── Other state ─────────────────────────────────────────────────────────
@@ -213,6 +215,12 @@ export default function App() {
     if (!node) return
     updateCurrentSession({ dsl: rewriteNodeLabel(dsl, idKey, node.label, newLabel) })
   }, [ast, dsl, updateCurrentSession])
+
+  const commitSessionTitle = useCallback(() => {
+    const trimmed = sessionTitleDraft.trim()
+    if (trimmed) updateCurrentSession({ title: trimmed, titleManual: true })
+    setEditingSessionTitle(false)
+  }, [sessionTitleDraft, updateCurrentSession])
 
   const handleDeleteSession = useCallback((id) => {
     setSessions(prev => {
@@ -271,6 +279,7 @@ export default function App() {
     const currentMessages = currentSession?.messages ?? []
     const t = setTimeout(() => {
       if (!sessionId) return
+      if (currentSession?.titleManual) return
       const newTitle = deriveTitle(dsl, currentMessages)
       if (newTitle !== currentTitle) {
         setSessions(prev => prev.map(s =>
@@ -537,13 +546,40 @@ export default function App() {
               className={`flex items-center justify-between px-3 py-1.5 border-b ${ts.editorBg}`}
               style={{ borderColor: 'inherit' }}
             >
-              <button
-                onClick={() => setHistoryOpen(o => !o)}
-                className={`flex items-center gap-1 text-xs font-medium flex-1 min-w-0 mr-2 text-left ${ts.headerText} opacity-60 hover:opacity-100 transition-opacity`}
-              >
-                <span className="truncate">{currentSession?.title ?? 'Nueva sesión'}</span>
-                <ChevronDown size={11} className="shrink-0 ml-1" />
-              </button>
+              <div className={`flex items-center gap-1 flex-1 min-w-0 mr-2 text-xs font-medium ${ts.headerText}`}>
+                {editingSessionTitle ? (
+                  <input
+                    autoFocus
+                    value={sessionTitleDraft}
+                    onChange={e => setSessionTitleDraft(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') { e.preventDefault(); commitSessionTitle() }
+                      if (e.key === 'Escape') setEditingSessionTitle(false)
+                    }}
+                    onBlur={commitSessionTitle}
+                    className={`flex-1 min-w-0 bg-transparent border-b outline-none truncate ${ts.headerText}`}
+                    style={{ borderColor: 'currentColor' }}
+                  />
+                ) : (
+                  <button
+                    className="group flex items-center gap-1 min-w-0 opacity-70 hover:opacity-100 transition-opacity"
+                    title="Renombrar diagrama"
+                    onClick={() => {
+                      setSessionTitleDraft(currentSession?.title ?? '')
+                      setEditingSessionTitle(true)
+                    }}
+                  >
+                    <span className="truncate">{currentSession?.title ?? 'Nueva sesión'}</span>
+                    <Edit2 size={10} className="shrink-0 opacity-0 group-hover:opacity-60 transition-opacity" />
+                  </button>
+                )}
+                <button
+                  onClick={() => setHistoryOpen(o => !o)}
+                  className="shrink-0 opacity-60 hover:opacity-100 transition-opacity"
+                >
+                  <ChevronDown size={11} />
+                </button>
+              </div>
               <button
                 onClick={handleNewSession}
                 className={`flex items-center gap-1 px-2 py-0.5 rounded text-xs shrink-0 ${ts.btnSecondary}`}

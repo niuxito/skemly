@@ -14,6 +14,18 @@ export function extractDSL(input) {
   return match ? match[1] : input
 }
 
+// ─── Text formatting ──────────────────────────────────────────────────────────
+// Parses **bold** and __underline__ markers from a label string.
+// Markers can be nested in any order: **__text__** or __**text**__
+function parseTextFormatting(text) {
+  let bold = false, underline = false
+  let t = text.trim()
+  if (t.startsWith('**') && t.endsWith('**') && t.length > 4) { bold = true; t = t.slice(2, -2).trim() }
+  if (t.startsWith('__') && t.endsWith('__') && t.length > 4) { underline = true; t = t.slice(2, -2).trim() }
+  if (!bold && t.startsWith('**') && t.endsWith('**') && t.length > 4) { bold = true; t = t.slice(2, -2).trim() }
+  return { label: t, bold, underline }
+}
+
 // ─── Icon Inference ───────────────────────────────────────────────────────────
 const ICON_KEYWORDS = [
   { re: /\b(user|users|person|people)\b/i, icon: 'User' },
@@ -377,20 +389,21 @@ export function parseDSL(rawInput) {
           inner = inner.slice(0, iconMatch.index).trim()
         }
 
-        let id, label
+        let id, rawLabel
         if (inner.includes('|')) {
           const pipe = inner.indexOf('|')
           id = inner.slice(0, pipe).trim()
-          label = inner.slice(pipe + 1).trim()
+          rawLabel = inner.slice(pipe + 1).trim()
         } else {
           id = inner
-          label = inner
+          rawLabel = inner
         }
 
+        const { label, bold, underline } = parseTextFormatting(rawLabel)
         const id_key = normalizeId(id)
         const icon = inferIcon(label, explicitIcon)
 
-        nodes.push({ id_key, label, shape, tags, icon })
+        nodes.push({ id_key, label, shape, tags, icon, bold, underline })
         return true
       }
 

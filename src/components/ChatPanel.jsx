@@ -44,7 +44,7 @@ const THEME_TOKENS = {
   },
 }
 
-function MessageBubble({ msg, onReapply, tk }) {
+function MessageBubble({ msg, onReapply, onRetry, tk }) {
   if (msg.role === 'user') {
     return (
       <div className="flex justify-end gap-2 items-start">
@@ -60,7 +60,18 @@ function MessageBubble({ msg, onReapply, tk }) {
     return (
       <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${tk.errorBubble}`}>
         <AlertCircle size={14} className="mt-0.5 shrink-0" />
-        <span>{msg.content}</span>
+        <div className="flex-1 flex items-start justify-between gap-2">
+          <span>{msg.content}</span>
+          {msg.retryText && (
+            <button
+              onClick={() => onRetry?.(msg.retryText, msg.id)}
+              className="shrink-0 flex items-center gap-1 text-xs underline opacity-70 hover:opacity-100 transition-opacity"
+            >
+              <RotateCcw size={10} />
+              Reintentar
+            </button>
+          )}
+        </div>
       </div>
     )
   }
@@ -149,13 +160,43 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
         errorText = err.message
       }
       onMessagesChange(
-        [...newMessages, { id: Date.now() + 2, role: 'error', content: errorText }],
+        [...newMessages, { id: Date.now() + 2, role: 'error', content: errorText, retryText: text }],
         chatHistory
       )
     } finally {
       setLoading(false)
     }
   }, [input, loading, messages, chatHistory, currentDsl, onDslUpdate, onMessagesChange])
+
+  const handleRetry = useCallback(async (retryText, errorMsgId) => {
+    if (loading) return
+    const messagesWithoutError = messages.filter(m => m.id !== errorMsgId)
+    onMessagesChange(messagesWithoutError, chatHistory)
+    setLoading(true)
+    try {
+      const { dsl: result, remaining } = await callClaude(retryText, chatHistory, currentDsl)
+      const isDsl = looksLikeDsl(result)
+      const assistantMsg = { id: Date.now(), role: 'assistant', content: result, isDsl }
+      const newHistory = [
+        ...chatHistory.slice(-10),
+        { role: 'user', content: retryText },
+        { role: 'assistant', content: result },
+      ]
+      onMessagesChange([...messagesWithoutError, assistantMsg], newHistory)
+      if (remaining !== null) onRemainingChange?.(remaining)
+      if (isDsl) onDslUpdate(result)
+    } catch (err) {
+      let errorText = 'Unknown error'
+      if (err instanceof TypeError) errorText = 'Network error — check your connection'
+      else if (err?.message) errorText = err.message
+      onMessagesChange(
+        [...messagesWithoutError, { id: Date.now(), role: 'error', content: errorText, retryText }],
+        chatHistory
+      )
+    } finally {
+      setLoading(false)
+    }
+  }, [loading, messages, chatHistory, currentDsl, onDslUpdate, onMessagesChange, onRemainingChange])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -176,7 +217,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
           </div>
         )}
         {messages.map(msg => (
-          <MessageBubble key={msg.id} msg={msg} onReapply={handleReapply} tk={tk} />
+          <MessageBubble key={msg.id} msg={msg} onReapply={handleReapply} onRetry={handleRetry} tk={tk} />
         ))}
         {loading && (
           <div className="flex gap-2 items-center">

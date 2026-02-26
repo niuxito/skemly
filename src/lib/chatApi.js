@@ -64,6 +64,11 @@ layout: MM
 - login/signin → LogIn icon
 - Explicit override: [Node]@icon=IconName where IconName is PascalCase Lucide icon (e.g. @icon=User, @icon=Database, @icon=Shield, @icon=Globe, @icon=Cpu, @icon=Smartphone)
 
+### Text formatting in node labels
+- Bold: [**Node label**]
+- Underline: [__Node label__]
+- Both: [**__Node label__**] or [__**Node label**__]
+
 ### Example
 \`\`\`
 vibe: clean

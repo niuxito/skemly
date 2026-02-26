@@ -93,6 +93,8 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
       return (
         <text x={cx} y={firstLineY} textAnchor="middle" dominantBaseline="middle"
           fontFamily={theme.font} fontSize={theme.fontSize} fill={textColor}
+          fontWeight={node.bold ? 'bold' : undefined}
+          textDecoration={node.underline ? 'underline' : undefined}
           visibility={textVisibility}
           style={{ userSelect: 'none', pointerEvents: 'none' }}>
           {lines.map((line, i) => (
@@ -107,6 +109,8 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
     return (
       <text x={cx} y={textY} textAnchor="middle" dominantBaseline="middle"
         fontFamily={theme.font} fontSize={theme.fontSize} fill={textColor}
+        fontWeight={node.bold ? 'bold' : undefined}
+        textDecoration={node.underline ? 'underline' : undefined}
         visibility={textVisibility}
         style={{ userSelect: 'none', pointerEvents: 'none' }}>
         {node.label}
@@ -577,6 +581,8 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
                 <text x={cx} y={cy + textYOffset + (node.shape === 'cylinder' ? 0 : 1)}
                   textAnchor="middle" dominantBaseline="middle"
                   fontFamily={theme.font} fontSize={theme.fontSize} fill={textColor}
+                  fontWeight={node.bold ? 'bold' : undefined}
+                  textDecoration={node.underline ? 'underline' : undefined}
                   visibility={textVis}
                   style={{ userSelect: 'none', pointerEvents: 'none' }}>
                   {node.label}
