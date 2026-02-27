@@ -2,7 +2,7 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { request as httpsRequest } from 'https'
-import { checkRateLimit, checkFileRateLimit } from './api/_rateLimit.js'
+import { checkRateLimit, checkFileRateLimit, incrementFileCount } from './api/_rateLimit.js'
 import { buildAnthropicBody } from './api/_buildAnthropicBody.js'
 
 function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, fileMaxSize) {
@@ -113,6 +113,10 @@ function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, f
             },
           },
           proxyRes => {
+            // Only charge the file counter when Anthropic actually accepted the file
+            if (parsedBody.attachment && proxyRes.statusCode < 300) {
+              incrementFileCount({ ip, databaseUrl }).catch(() => {})
+            }
             res.statusCode = proxyRes.statusCode
             res.setHeader('Content-Type', 'application/json')
             proxyRes.pipe(res)

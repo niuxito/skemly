@@ -3,7 +3,7 @@
  * ANTHROPIC_API_KEY is read from Vercel environment variables (never exposed to the client).
  * Rate limiting via Neon PostgreSQL (DATABASE_URL + DAILY_LIMIT env vars).
  */
-import { checkRateLimit, checkFileRateLimit } from './_rateLimit.js'
+import { checkRateLimit, checkFileRateLimit, incrementFileCount } from './_rateLimit.js'
 import { buildAnthropicBody } from './_buildAnthropicBody.js'
 
 const FILE_MAX_SIZE = parseInt(process.env.FILE_MAX_SIZE_ANON ?? String(2 * 1024 * 1024), 10)
@@ -92,6 +92,11 @@ export default async function handler(req, res) {
       },
       body: JSON.stringify(anthropicBody),
     })
+
+    // Only charge the file counter when Anthropic actually accepted the file
+    if (attachment && upstream.ok) {
+      incrementFileCount({ ip, databaseUrl: process.env.DATABASE_URL }).catch(() => {})
+    }
 
     const data = await upstream.json()
     return res.status(upstream.status).json(data)
