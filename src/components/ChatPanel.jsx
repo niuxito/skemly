@@ -361,7 +361,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={loading || !!attachment}
-            title="Adjuntar fichero (imágenes, PDF, texto)"
+            title="Adjuntar fichero — imágenes (PNG/JPG/WEBP), PDF (máx. 100 pág.), texto"
             className={`shrink-0 p-2 rounded transition-colors disabled:opacity-30 ${tk.attachBtn}`}
           >
             <Paperclip size={14} />

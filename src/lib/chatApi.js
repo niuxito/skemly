@@ -164,6 +164,11 @@ export async function callClaude(userMessage, chatHistory, currentDsl, attachmen
       if (errBody?.error?.type === 'file_too_large') {
         throw new Error(errBody.error.message)
       }
+
+      // Anthropic API errors forwarded from proxy (e.g. PDF too many pages)
+      if (errBody?.error?.message) {
+        throw new Error(`Error al procesar el fichero: ${errBody.error.message}`)
+      }
     }
 
     const friendlyErrors = {
