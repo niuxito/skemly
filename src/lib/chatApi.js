@@ -2,6 +2,13 @@ const SYSTEM_PROMPT = `You are an expert diagramming assistant. Output ONLY raw 
 
 ## Node shapes
 [Text]=Box  (Text)=Cylinder  ?Text?=Diamond  <Text>=Cloud
+{id | Header | Body}=Card — header section + body description, separated by a divider line
+
+## Cards — STRICT two-step rule
+1. Declare ONCE (with body and @attrs): {c1 | Title | Description}@bg=red@color=white
+2. In ALL edges use ONLY the short id — {c1} -> [Node]
+NEVER write {c1 | Title | Description} again after the first declaration.
+WRONG: {c1 | Title | Desc} -> [Node]   RIGHT: {c1} -> [Node]
 
 ## IDs & edges
 - [id|Label] — if no |, id=label (normalized: lowercase, trim, collapse spaces)
@@ -17,7 +24,7 @@ const SYSTEM_PROMPT = `You are an expert diagramming assistant. Output ONLY raw 
 - layout: TD|LR|MM  (default: TD)
   - TD: sequential flows, pipelines, decision trees
   - LR: 2+ parallel groups or layers side by side
-  - MM: mindmaps — root=node with no incoming edges, [Box] nodes only, -> only
+  - MM: mindmaps — root=node with no incoming edges, -> only
 - spacing: N  edgeLabels: on|off
 
 ## Node attributes (after closing bracket, any order)
@@ -33,7 +40,8 @@ const SYSTEM_PROMPT = `You are an expert diagramming assistant. Output ONLY raw 
 
 ## Critical rules
 - EVERY node and edge must fit on a SINGLE line — never use \n or literal newlines inside labels
-- Keep labels short with spaces; break long concepts across multiple connected nodes instead`
+- Keep labels short with spaces; break long concepts across multiple connected nodes instead
+- Card body: declare ONCE at top, then reference by {id} only — repeating the body wastes tokens`
 
 function stripFences(text) {
   // Remove ```vibe, ```vibedraw, ``` fences

@@ -69,10 +69,11 @@ export default {
     {
       title: 'Formas',
       rows: [
-        { syntax: '[Texto]', desc: 'Caja (proceso, entidad)' },
-        { syntax: '(Texto)', desc: 'Cilindro (base de datos)' },
-        { syntax: '?Texto?', desc: 'Diamante (decisión)' },
-        { syntax: '<Texto>', desc: 'Nube (externo, SaaS)' },
+        { syntax: '[Texto]',           desc: 'Caja (proceso, entidad)' },
+        { syntax: '(Texto)',           desc: 'Cilindro (base de datos)' },
+        { syntax: '?Texto?',           desc: 'Diamante (decisión)' },
+        { syntax: '<Texto>',           desc: 'Nube (externo, SaaS)' },
+        { syntax: '{Header | Cuerpo}', desc: 'Tarjeta (título + descripción)' },
       ],
     },
     {

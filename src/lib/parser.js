@@ -333,6 +333,7 @@ export function parseDSL(rawInput) {
         else if (ch === '(') { closeCh = ')'; shape = 'cylinder' }
         else if (ch === '?') { closeCh = '?'; shape = 'diamond' }
         else if (ch === '<') { closeCh = '>'; shape = 'cloud' }
+        else if (ch === '{') { closeCh = '}'; shape = 'card' }
         else return false
 
         i++ // skip open
@@ -396,8 +397,18 @@ export function parseDSL(rawInput) {
           inner = inner.slice(0, iconMatch.index).trim()
         }
 
-        let id, rawLabel
-        if (inner.includes('|')) {
+        let id, rawLabel, cardBody = null
+        if (shape === 'card') {
+          // Card: {header}, {header|body}, or {id|header|body}
+          const parts = inner.split('|').map(p => p.trim())
+          if (parts.length >= 3) {
+            id = parts[0]; rawLabel = parts[1]; cardBody = parts.slice(2).join(' | ')
+          } else if (parts.length === 2) {
+            id = parts[0]; rawLabel = parts[0]; cardBody = parts[1]
+          } else {
+            id = parts[0]; rawLabel = parts[0]
+          }
+        } else if (inner.includes('|')) {
           const pipe = inner.indexOf('|')
           id = inner.slice(0, pipe).trim()
           rawLabel = inner.slice(pipe + 1).trim()
@@ -414,6 +425,7 @@ export function parseDSL(rawInput) {
           bgColor: outerBgColor ?? null,
           textColor: outerTextColor ?? null,
           url: outerUrl ?? null,
+          body: cardBody,
         })
         return true
       }

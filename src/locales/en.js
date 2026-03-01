@@ -69,10 +69,11 @@ export default {
     {
       title: 'Shapes',
       rows: [
-        { syntax: '[Text]',  desc: 'Box (process, entity)' },
-        { syntax: '(Text)',  desc: 'Cylinder (database)' },
-        { syntax: '?Text?',  desc: 'Diamond (decision)' },
-        { syntax: '<Text>',  desc: 'Cloud (external, SaaS)' },
+        { syntax: '[Text]',            desc: 'Box (process, entity)' },
+        { syntax: '(Text)',            desc: 'Cylinder (database)' },
+        { syntax: '?Text?',            desc: 'Diamond (decision)' },
+        { syntax: '<Text>',            desc: 'Cloud (external, SaaS)' },
+        { syntax: '{Header | Body}',   desc: 'Card (title + description)' },
       ],
     },
     {

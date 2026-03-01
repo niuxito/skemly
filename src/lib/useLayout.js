@@ -11,6 +11,11 @@ const PADDING_H = 24
 const PADDING_V = 10
 const MAX_WIDTH = 220
 const LINE_H = 17
+const CARD_MAX_WIDTH = 280
+const CARD_HEADER_H_MIN = 36
+const BODY_CHAR_W = 6.5
+const BODY_LINE_H = 15
+const BODY_PADDING_V = 8
 
 // Per-theme character width estimates (monospace vs proportional)
 const CHAR_WIDTH_BY_VIBE = {
@@ -37,6 +42,30 @@ function wrapText(label, maxInnerW, charW) {
 }
 
 function estimateNodeSize(node, charW) {
+  if (node.shape === 'card') {
+    const iconExtra = node.icon ? ICON_SIZE + 8 : 0
+    const maxHeaderInnerW = CARD_MAX_WIDTH - PADDING_H * 2 - iconExtra
+    const headerLines = wrapText(node.label, maxHeaderInnerW, charW)
+    const headerH = Math.max(CARD_HEADER_H_MIN, headerLines.length * LINE_H + PADDING_V * 2)
+
+    let bodyLines = [], bodyH = BODY_PADDING_V * 2
+    if (node.body) {
+      const maxBodyInnerW = CARD_MAX_WIDTH - PADDING_H * 2
+      bodyLines = wrapText(node.body, maxBodyInnerW, BODY_CHAR_W)
+      bodyH = bodyLines.length * BODY_LINE_H + BODY_PADDING_V * 2
+    }
+
+    const headerLineW = Math.max(...headerLines.map(l => l.length)) * charW + iconExtra + PADDING_H * 2
+    // Cards with body always use full CARD_MAX_WIDTH so body wrapping
+    // (done above assuming CARD_MAX_WIDTH - PAD inner space) always fits.
+    const w = node.body
+      ? CARD_MAX_WIDTH
+      : Math.min(Math.max(headerLineW, 160), CARD_MAX_WIDTH)
+    const h = headerH + bodyH
+
+    return { width: w, height: h, lines: headerLines, bodyLines, headerH }
+  }
+
   const iconExtra = node.icon ? ICON_SIZE + 8 : 0
   const maxInnerW = MAX_WIDTH - PADDING_H * 2 - iconExtra
   const lines = wrapText(node.label, maxInnerW, charW)
@@ -68,10 +97,14 @@ async function runLayout(ast) {
 
   // Store word-wrap lines keyed by node id to re-attach after ELK layout
   const linesMap = {}
+  const bodyLinesMap = {}
+  const headerHMap = {}
 
   function elkLeafNode(n) {
-    const { width, height, lines } = estimateNodeSize(n, charW)
+    const { width, height, lines, bodyLines, headerH } = estimateNodeSize(n, charW)
     linesMap[n.id_key] = lines
+    if (bodyLines !== undefined) bodyLinesMap[n.id_key] = bodyLines
+    if (headerH !== undefined) headerHMap[n.id_key] = headerH
     return {
       id: n.id_key,
       width,
@@ -88,6 +121,8 @@ async function runLayout(ast) {
         annotateLines(child.children)
       } else {
         child.lines = linesMap[child.id]
+        if (bodyLinesMap[child.id] !== undefined) child.bodyLines = bodyLinesMap[child.id]
+        if (headerHMap[child.id] !== undefined) child.headerH = headerHMap[child.id]
       }
     }
   }

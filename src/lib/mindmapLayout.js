@@ -10,6 +10,12 @@ const LINE_H     = 17   // line height (px)
 const PAD_W      = 24   // horizontal padding (12px each side)
 const PAD_V      = 10   // vertical padding (5px top + 5px bottom)
 
+const CARD_MAX_W        = 220  // card nodes are wider
+const CARD_HEADER_H_MIN = 36
+const BODY_CHAR_W       = 6.5
+const BODY_LINE_H       = 15
+const BODY_PAD_V        = 8
+
 // Wrap a label into lines that fit within maxInnerW pixels
 function wrapLabel(label, maxInnerW) {
   const words = label.split(' ')
@@ -28,7 +34,43 @@ function wrapLabel(label, maxInnerW) {
   return lines.length ? lines : [label]
 }
 
+function wrapBody(text, maxInnerW) {
+  const words = (text || '').split(' ')
+  const lines = []
+  let current = ''
+  for (const word of words) {
+    const test = current ? `${current} ${word}` : word
+    if (test.length * BODY_CHAR_W <= maxInnerW) {
+      current = test
+    } else {
+      if (current) lines.push(current)
+      current = word
+    }
+  }
+  if (current) lines.push(current)
+  return lines
+}
+
 function nodeSize(n) {
+  if (n.shape === 'card') {
+    const maxHeaderInnerW = CARD_MAX_W - PAD_W
+    const headerLines = wrapLabel(n.label, maxHeaderInnerW)
+    const headerH = Math.max(CARD_HEADER_H_MIN, headerLines.length * LINE_H + PAD_V * 2)
+
+    let bodyLines = [], bodyH = BODY_PAD_V * 2
+    if (n.body) {
+      bodyLines = wrapBody(n.body, CARD_MAX_W - PAD_W)
+      bodyH = bodyLines.length * BODY_LINE_H + BODY_PAD_V * 2
+    }
+
+    // Cards with body always use full CARD_MAX_W so body wrapping (done above
+    // assuming CARD_MAX_W - PAD_W inner space) always fits within the card.
+    const longestHeaderW = Math.max(...headerLines.map(l => l.length * CHAR_W)) + PAD_W
+    const w = n.body ? CARD_MAX_W : Math.min(CARD_MAX_W, Math.max(140, longestHeaderW))
+    const h = headerH + bodyH
+    return { width: w, height: h, lines: headerLines, bodyLines, headerH }
+  }
+
   const maxInnerW = MAX_NODE_W - PAD_W
   const lines = wrapLabel(n.label, maxInnerW)
   // Width: single-line uses exact text width; multi-line always uses MAX_NODE_W
@@ -150,12 +192,17 @@ export function mindmapLayout(ast) {
   const offsetPt = ({ x, y }) => ({ x: x - minX, y: y - minY })
 
   // Build ELK-compatible children list
-  const children = Object.entries(positions).map(([id, pos]) => ({
-    id,
-    ...offset(pos),
-    labels: [{ text: nodes.find(n => n.id_key === id)?.label ?? id }],
-    lines: sizeMap[id]?.lines,   // word-wrapped lines for multi-line rendering
-  }))
+  const children = Object.entries(positions).map(([id, pos]) => {
+    const sz = sizeMap[id]
+    return {
+      id,
+      ...offset(pos),
+      labels: [{ text: nodes.find(n => n.id_key === id)?.label ?? id }],
+      lines: sz?.lines,          // word-wrapped lines for multi-line rendering
+      ...(sz?.bodyLines !== undefined ? { bodyLines: sz.bodyLines } : {}),
+      ...(sz?.headerH  !== undefined ? { headerH:   sz.headerH  } : {}),
+    }
+  })
 
   // Build bezier edge sections
   const layoutEdges = edges.map((e, i) => {

@@ -5,6 +5,8 @@ import * as LucideIcons from 'lucide-react'
 import { Maximize2, Minimize2, ExternalLink } from 'lucide-react'
 
 const ICON_SIZE = 18
+const CARD_BODY_LINE_H = 15
+const CARD_BODY_PADDING = 8
 
 // ─── Icon ─────────────────────────────────────────────────────────────────────
 function IconSVG({ name, x, y, size = ICON_SIZE, color }) {
@@ -77,6 +79,16 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
       case 'cloud':
         return <rect x={x} y={y} width={w} height={h} rx={h / 2} fill={fill} stroke={stroke}
           strokeWidth={theme.nodeStrokeWidth} strokeDasharray="4 2" filter={glowFilter} />
+      case 'card': {
+        const headerH = elkNode.headerH ?? 36
+        return (
+          <g filter={glowFilter}>
+            <rect x={x} y={y} width={w} height={h} rx={4} fill={fill} stroke={stroke} strokeWidth={theme.nodeStrokeWidth} />
+            <line x1={x + 1} y1={y + headerH} x2={x + w - 1} y2={y + headerH}
+              stroke={stroke} strokeWidth={Math.max(theme.nodeStrokeWidth * 0.75, 0.75)} strokeOpacity={0.5} />
+          </g>
+        )
+      }
       default:
         return <rect x={x} y={y} width={w} height={h} rx={4} fill={fill} stroke={stroke} strokeWidth={theme.nodeStrokeWidth} />
     }
@@ -86,6 +98,32 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
   const textVisibility = isEditing ? 'hidden' : 'visible'
 
   function renderText() {
+    if (node.shape === 'card') {
+      const headerH = elkNode.headerH ?? 36
+      const headerCY = y + headerH / 2
+      const bodyLines = elkNode.bodyLines ?? []
+      const bodyFontSize = Math.max(theme.fontSize - 2, 10)
+      const textX = hasIcon ? x + 16 + ICON_SIZE * 1.5 : cx
+      const anchor = hasIcon ? 'start' : 'middle'
+      return (
+        <g visibility={textVisibility} style={{ userSelect: 'none', pointerEvents: 'none' }}>
+          <text x={textX} y={headerCY} textAnchor={anchor} dominantBaseline="middle"
+            fontFamily={theme.font} fontSize={theme.fontSize} fill={textColor} fontWeight="600">
+            {node.label}
+          </text>
+          {bodyLines.length > 0 && (
+            <text x={x + 12} y={y + headerH + CARD_BODY_PADDING}
+              textAnchor="start" dominantBaseline="hanging"
+              fontFamily={theme.font} fontSize={bodyFontSize} fill={textColor} fillOpacity={0.75}>
+              {bodyLines.map((line, i) => (
+                <tspan key={i} x={x + 12} dy={i === 0 ? 0 : CARD_BODY_LINE_H}>{line}</tspan>
+              ))}
+            </text>
+          )}
+        </g>
+      )
+    }
+
     const textYOffset = hasIcon ? 10 : 0  // shift text down when icon is above
     if (isMultiLine) {
       // Center of text block sits at cy + textYOffset
@@ -119,12 +157,15 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
     )
   }
 
-  const iconY = cy - (hasIcon ? 10 : 0)
+  const isCard = node.shape === 'card'
+  const cardHeaderH = isCard ? (elkNode.headerH ?? 36) : 0
+  const iconY = isCard ? y + cardHeaderH / 2 : cy - (hasIcon ? 10 : 0)
+  const iconX = isCard ? x + 16 + ICON_SIZE / 2 : cx
 
   return (
     <g>
       <Shape />
-      {hasIcon && <IconSVG name={node.icon} x={cx} y={iconY} color={textColor} />}
+      {hasIcon && <IconSVG name={node.icon} x={iconX} y={iconY} color={textColor} />}
       {renderText()}
     </g>
   )
@@ -263,6 +304,14 @@ function RoughOverlay({ ast, nodeMap, theme, totalW, totalH, canvasRef: external
           rc.polygon([[cx, cy - h / 2], [cx + w / 2, cy], [cx, cy + h / 2], [cx - w / 2, cy]], opts); break
         case 'cloud':
           rc.rectangle(x, y, w, h, { ...opts, roughness: 2 }); break
+        case 'card': {
+          rc.rectangle(x, y, w, h, opts)
+          const headerH = en.headerH ?? 36
+          rc.line(x + 1, y + headerH, x + w - 1, y + headerH, {
+            stroke: opts.stroke, strokeWidth: (opts.strokeWidth ?? 1) * 0.75, roughness: 0.5,
+          })
+          break
+        }
         default: rc.rectangle(x, y, w, h, opts)
       }
     }
@@ -749,6 +798,44 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
           const textColor = node.textColor ?? tagStyle?.text ?? theme.nodeText
           const textYOffset = hasIcon ? 10 : 0
           const textVis = isEditing ? 'hidden' : 'visible'
+
+          if (node.shape === 'card') {
+            const headerH = elkNode.headerH ?? 36
+            const headerCY = y + headerH / 2
+            const bodyLines = elkNode.bodyLines ?? []
+            const bodyFontSize = Math.max(theme.fontSize - 2, 10)
+            const iconRenderX = hasIcon ? x + 16 + ICON_SIZE / 2 : cx
+            const textX = hasIcon ? x + 16 + ICON_SIZE * 1.5 : cx
+            const anchor = hasIcon ? 'start' : 'middle'
+            return (
+              <g key={node.id_key} onDoubleClick={e => { e.stopPropagation(); handleNodeDblClick(node) }}>
+                {node.url && (
+                  <foreignObject x={x + w - 14} y={y + 3} width={11} height={11} style={{ pointerEvents: 'none' }}>
+                    <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: 11, height: 11, display: 'flex', opacity: 0.55 }}>
+                      <ExternalLink size={10} color={textColor} strokeWidth={2} />
+                    </div>
+                  </foreignObject>
+                )}
+                {hasIcon && <IconSVG name={node.icon} x={iconRenderX} y={headerCY} color={textColor} />}
+                <text x={textX} y={headerCY} textAnchor={anchor} dominantBaseline="middle"
+                  fontFamily={theme.font} fontSize={theme.fontSize} fill={textColor} fontWeight="600"
+                  visibility={textVis} style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                  {node.label}
+                </text>
+                {bodyLines.length > 0 && (
+                  <text x={x + 12} y={y + headerH + CARD_BODY_PADDING}
+                    textAnchor="start" dominantBaseline="hanging"
+                    fontFamily={theme.font} fontSize={bodyFontSize} fill={textColor} fillOpacity={0.75}
+                    visibility={textVis} style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                    {bodyLines.map((line, i) => (
+                      <tspan key={i} x={x + 12} dy={i === 0 ? 0 : CARD_BODY_LINE_H}>{line}</tspan>
+                    ))}
+                  </text>
+                )}
+              </g>
+            )
+          }
+
           return (
             <g key={node.id_key} onDoubleClick={e => { e.stopPropagation(); handleNodeDblClick(node) }}>
               {hasIcon && <IconSVG name={node.icon} x={cx} y={cy - 10} color={textColor} />}
