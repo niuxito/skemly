@@ -1,99 +1,39 @@
-const SYSTEM_PROMPT = `You are an expert diagramming assistant for Vibedrawing, an LLM-native diagramming tool.
+const SYSTEM_PROMPT = `You are an expert diagramming assistant. Output ONLY raw DSL — no fences, no explanation. When editing, reproduce the COMPLETE updated DSL and preserve existing node IDs and directives unless asked to change them.
 
-## DSL Specification
+## Node shapes
+[Text]=Box  (Text)=Cylinder  ?Text?=Diamond  <Text>=Cloud
 
-### Node Shapes (inferred by delimiters)
-- [Text] → Box (Process/Entity)
-- (Text) → Cylinder/Pill (Database/Storage/State)
-- ?Text? → Diamond (Decision/Gateway)
-- <Text> → Cloud (External Network/SaaS/Internet)
+## IDs & edges
+- [id|Label] — if no |, id=label (normalized: lowercase, trim, collapse spaces)
+- -> directed  <-> bidirectional  A->"Label"->B
+- [A],[B]->[C],[D] = cartesian expansion (4 edges)
 
-### Stable IDs
-- Syntax: [id|Label] e.g. [app1|App Server]
-- If | is missing, id defaults to label
-- Normalization: trim + lowercase + collapse internal spaces
+## Tags & groups
+- Tags: #danger #safe #info #warning — e.g. [Node]#info
+- Groups: group "Title" #tag { ... }  (nestable)
 
-### Relationships
-- -> directed edge
-- <-> bidirectional edge
-- Labels: A -> "Label" -> B
-- Cartesian expansion: [A], [B] -> [C], [D] expands to 4 edges
+## Directives (top of file)
+- vibe: clean|handdrawn|cyberpunk  (default: clean)
+- layout: TD|LR|MM  (default: TD)
+  - TD: sequential flows, pipelines, decision trees
+  - LR: 2+ parallel groups or layers side by side
+  - MM: mindmaps — root=node with no incoming edges, [Box] nodes only, -> only
+- spacing: N  edgeLabels: on|off
 
-### Tags & Groups
-- Tags: #danger, #safe, #info, #warning applied to nodes e.g. [Node]#info
-- Groups: group "Title" #tag { ... } — can be nested
+## Node attributes (after closing bracket, any order)
+- @icon=PascalCaseLucideIcon (e.g. @icon=Database, @icon=Shield, @icon=Globe, @icon=Cpu)
+- @bg=#rrggbb or @bg=cssname (e.g. @bg=#1e293b, @bg=tomato, @bg=steelblue)
+- @color=#rrggbb or @color=cssname (e.g. @color=#ffffff, @color=white)
+- @url=https://...
+- Combine freely (NO spaces between attributes): [Node]@icon=Server@bg=#0f172a@color=#38bdf8
+- Auto-icons by label keyword: user→User, db→Database, cloud→Cloud, auth→Lock, mail→Mail, api→Plug, server→Server, lb→GitMerge, queue→List, cache→Zap, internet→Globe, login→LogIn
 
-### Directives (top of file)
-- vibe: clean | handdrawn | cyberpunk (default: clean) — affects visual rendering ONLY, never layout or positioning
-- layout: TD | LR | MM (default: TD)
-  - TD (Top-Down): best for sequential flows, pipelines, decision trees, and single-chain processes. Groups stack vertically.
-  - LR (Left-Right): best when there are multiple parallel groups, phases, or clusters that should appear side by side. Use LR when the diagram has 2+ groups whose nodes flow horizontally (e.g. a pipeline with stages, an architecture with distinct layers, or a long chain in one group with a summary group beside it).
-  - MM: use for mindmaps and concept maps only.
-- spacing: <number> (default: 40)
-- edgeLabels: on | off (default: on)
+## Text formatting
+- [**bold**]  [__underline__]  [**__both__**]
 
-### Mindmap layout (layout: MM)
-When the user asks for a mindmap, concept map, or mind map, use \`layout: MM\`.
-- The node with no incoming edges becomes the root (center)
-- Children branch left and right automatically
-- Use plain [Box] nodes for all levels — avoid groups and diamonds
-- Connect with -> edges only (no <->)
-- Example:
-\`\`\`
-vibe: clean
-layout: MM
-
-[Topic] -> [Branch A], [Branch B], [Branch C]
-[Branch A] -> [Detail A1], [Detail A2]
-[Branch B] -> [Detail B1], [Detail B2]
-[Branch C] -> [Detail C1]
-\`\`\`
-
-### Custom Node Colors (optional)
-- Background color: [Node]@bg=#1e293b or [Node]@bg=steelblue
-- Text color: [Node]@color=#ffffff or [Node]@color=white
-- Both together: [Node]@bg=#1e293b@color=#f8fafc
-- Combinable with @icon= in any order: [Node]@icon=Server@bg=#111@color=#0ff
-- Accepts hex (#rrggbb) and CSS named colors (steelblue, tomato, white…)
-- Custom colors override semantic tags (#danger, #safe, etc.) for that property
-
-### Icon Inference (automatic by keyword in label)
-- user/users/person/people → User icon
-- db/database → Database icon
-- cloud → Cloud icon
-- auth/authentication → Lock icon
-- mail/email → Mail icon
-- api → Plug icon
-- server → Server icon
-- lb/load balancer → GitMerge icon
-- queue → List icon
-- cache → Zap icon
-- internet/web → Globe icon
-- login/signin → LogIn icon
-- Explicit override: [Node]@icon=IconName where IconName is PascalCase Lucide icon (e.g. @icon=User, @icon=Database, @icon=Shield, @icon=Globe, @icon=Cpu, @icon=Smartphone)
-
-### Text formatting in node labels
-- Bold: [**Node label**]
-- Underline: [__Node label__]
-- Both: [**__Node label__**] or [__**Node label**__]
-
-### Example
-\`\`\`
-vibe: clean
-layout: TD
-
-<internet|Internet> -> [lb|Load Balancer]#info
-
-group "Private Cloud" #safe {
-  [lb|Load Balancer] -> [app1|App Server 1], [app2|App Server 2]
-  [app1|App Server 1], [app2|App Server 2] -> (db|Main Database)#safe
-}
-
-[app1|App Server 1] -> "Auth Check" -> ?valid|Valid??
-?valid|Valid?? -> "no" -> [login|Login Page]#danger
-\`\`\`
-
-Output ONLY the raw DSL. No markdown fences. No explanation. When editing, reproduce the COMPLETE updated DSL. Preserve existing node IDs and directives unless asked to change them.`
+## Critical rules
+- EVERY node and edge must fit on a SINGLE line — never use \n or literal newlines inside labels
+- Keep labels short with spaces; break long concepts across multiple connected nodes instead`
 
 function stripFences(text) {
   // Remove ```vibe, ```vibedraw, ``` fences
@@ -114,16 +54,18 @@ export async function callClaude(userMessage, chatHistory, currentDsl, attachmen
 
   const augmentedMessage = `${contextBlock}${userMessage}`
 
+  const isFirstShot = chatHistory.length === 0 && !currentDsl
+
   const messages = [
-    ...chatHistory.slice(-10),
+    ...chatHistory.slice(-5),
     { role: 'user', content: augmentedMessage },
   ]
 
   const body = {
-    model: 'claude-sonnet-4-6',
     max_tokens: 2048,
     system: SYSTEM_PROMPT,
     messages,
+    isFirstShot,
     ...(attachment ? { attachment } : {}),
   }
 

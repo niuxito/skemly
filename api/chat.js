@@ -9,6 +9,10 @@ import { buildAnthropicBody } from './_buildAnthropicBody.js'
 const FILE_MAX_SIZE = parseInt(process.env.FILE_MAX_SIZE_ANON ?? String(2 * 1024 * 1024), 10)
 const FILE_DAILY_LIMIT = parseInt(process.env.FILE_DAILY_LIMIT_ANON ?? '5', 10)
 
+const MODEL_FIRSTSHOT = process.env.AI_MODEL_FIRSTSHOT ?? 'claude-sonnet-4-6'
+const MODEL_EDIT = process.env.AI_MODEL_EDIT ?? 'claude-haiku-4-5-20251001'
+const MODEL_PRO = process.env.AI_MODEL_PRO ?? 'claude-sonnet-4-6'
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -77,9 +81,14 @@ export default async function handler(req, res) {
     }
   }
 
+  // ─── Model selection (first-shot vs edit) ────────────────────────────────
+  const { isFirstShot } = req.body
+  // TODO: check user plan when auth is wired up (userPlan === 'pro' → MODEL_PRO)
+  const selectedModel = isFirstShot ? MODEL_FIRSTSHOT : MODEL_EDIT
+
   // ─── Proxy to Anthropic ───────────────────────────────────────────────────
   try {
-    const anthropicBody = buildAnthropicBody(req.body)
+    const anthropicBody = { ...buildAnthropicBody(req.body), model: selectedModel }
 
     const isPdf = attachment?.mediaType === 'application/pdf'
     const upstream = await fetch('https://api.anthropic.com/v1/messages', {

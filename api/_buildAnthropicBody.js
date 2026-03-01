@@ -3,7 +3,8 @@
  * user message as a multi-part content array for the Anthropic Messages API.
  */
 export function buildAnthropicBody(rawBody) {
-  const { attachment, ...rest } = rawBody
+  // Strip fields that are internal to the proxy and must not reach Anthropic
+  const { attachment, isFirstShot, ...rest } = rawBody
   if (!attachment) return rest
 
   const messages = rawBody.messages.map((m, i, arr) => {

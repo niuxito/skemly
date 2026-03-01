@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import rough from 'roughjs'
 import { THEMES } from '../lib/themes.js'
 import * as LucideIcons from 'lucide-react'
-import { Maximize2, Minimize2 } from 'lucide-react'
+import { Maximize2, Minimize2, ExternalLink } from 'lucide-react'
 
 const ICON_SIZE = 18
 
@@ -216,7 +216,8 @@ function GroupRect({ group, bounds, theme }) {
   return (
     <g>
       <rect x={x} y={y} width={w} height={h} rx={8}
-        fill={fill} stroke={stroke} strokeWidth={1.5} strokeDasharray="6 3" />
+        fill={fill} fillOpacity={theme.groupFillOpacity ?? 1}
+        stroke={stroke} strokeWidth={1.5} strokeDasharray="6 3" />
       <text x={x + 12} y={y + 16} fontFamily={theme.font} fontSize={theme.fontSize - 1}
         fontWeight="600" fill={textColor} style={{ userSelect: 'none' }}>
         {group.label}
@@ -310,6 +311,21 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
     setEditingNodeId(node.id_key)
     setEditingValue(node.label)
   }, [])
+
+  // Click = open URL (with delay to avoid firing on dblclick); dblclick = edit label
+  const clickTimerRef = useRef(null)
+  const handleNodeClick = useCallback((node) => {
+    if (!node.url) return
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current)
+    clickTimerRef.current = setTimeout(() => {
+      window.open(node.url, '_blank', 'noopener,noreferrer')
+      clickTimerRef.current = null
+    }, 250)
+  }, [])
+  const handleNodeDblClick = useCallback((node) => {
+    if (clickTimerRef.current) { clearTimeout(clickTimerRef.current); clickTimerRef.current = null }
+    openEdit(node)
+  }, [openEdit])
 
   // Build lookup maps from ELK layout (supports hierarchical compound nodes for groups)
   const { nodeMap, edgeMap, groupMap } = buildFlatLayoutMap(elkLayout)
@@ -406,6 +422,26 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
 
   useEffect(() => { if (elkLayout) fitView() }, [elkLayout, fitView])
 
+  // Trigger fitView when the container transitions from hidden (size 0) to visible
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const prevSize = { w: 0, h: 0 }
+    const obs = new ResizeObserver(entries => {
+      for (const entry of entries) {
+        const { width: w, height: h } = entry.contentRect
+        if ((prevSize.w === 0 || prevSize.h === 0) && w > 0 && h > 0) {
+          fitView()
+        }
+        prevSize.w = w
+        prevSize.h = h
+      }
+    })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [fitView])
+
+
   const onMouseDown = (e) => {
     if (e.button !== 0) return
     if (editingNodeId) return  // don't drag while editing
@@ -496,10 +532,17 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement)
+    const handler = () => {
+      const isFs = !!document.fullscreenElement
+      setIsFullscreen(isFs)
+      if (!isFs) {
+        // Wait two frames for the browser to restore layout before refitting
+        requestAnimationFrame(() => requestAnimationFrame(() => fitView()))
+      }
+    }
     document.addEventListener('fullscreenchange', handler)
     return () => document.removeEventListener('fullscreenchange', handler)
-  }, [])
+  }, [fitView])
 
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenEnabled) return
@@ -674,10 +717,20 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
           const elkNode = nodeMap[node.id_key]
           if (!elkNode) return null
           const isEditing = editingNodeId === node.id_key
+          const tagStyle = getTagStyle(node.tags || [], theme)
+          const textColor = node.textColor ?? tagStyle?.text ?? theme.nodeText
+          const { x = 0, y = 0, width: w } = elkNode
           return (
-            <g key={node.id_key} onDoubleClick={e => { e.stopPropagation(); openEdit(node) }}
+            <g key={node.id_key} onDoubleClick={e => { e.stopPropagation(); handleNodeDblClick(node) }}
               style={{ cursor: onNodeLabelChange ? 'default' : undefined }}>
               <NodeShape node={node} elkNode={elkNode} theme={theme} isEditing={isEditing} />
+              {node.url && (
+                <foreignObject x={x + w - 14} y={y + 3} width={11} height={11} style={{ pointerEvents: 'none' }}>
+                  <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: 11, height: 11, display: 'flex', opacity: 0.55 }}>
+                    <ExternalLink size={10} color={textColor} strokeWidth={2} />
+                  </div>
+                </foreignObject>
+              )}
             </g>
           )
         })}
@@ -697,8 +750,15 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
           const textYOffset = hasIcon ? 10 : 0
           const textVis = isEditing ? 'hidden' : 'visible'
           return (
-            <g key={node.id_key} onDoubleClick={e => { e.stopPropagation(); openEdit(node) }}>
+            <g key={node.id_key} onDoubleClick={e => { e.stopPropagation(); handleNodeDblClick(node) }}>
               {hasIcon && <IconSVG name={node.icon} x={cx} y={cy - 10} color={textColor} />}
+              {node.url && (
+                <foreignObject x={x + w - 14} y={y + 3} width={11} height={11} style={{ pointerEvents: 'none' }}>
+                  <div xmlns="http://www.w3.org/1999/xhtml" style={{ width: 11, height: 11, display: 'flex', opacity: 0.55 }}>
+                    <ExternalLink size={10} color={textColor} strokeWidth={2} />
+                  </div>
+                </foreignObject>
+              )}
               {isMultiLine ? (
                 <text x={cx} y={cy + textYOffset - (lines.length - 1) * MM_LINE_H / 2}
                   textAnchor="middle" dominantBaseline="middle"
@@ -724,17 +784,21 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
           )
         })}
 
-        {/* Double-click hit areas (transparent, on top of everything) */}
-        {onNodeLabelChange && ast.nodes.map(node => {
+        {/* Hit areas: click = open URL, dblclick = edit label */}
+        {ast.nodes.map(node => {
           const elkNode = nodeMap[node.id_key]
           if (!elkNode) return null
+          const hasUrl = !!node.url
+          const canEdit = !!onNodeLabelChange
+          if (!hasUrl && !canEdit) return null
           return (
             <rect key={`hit-${node.id_key}`}
               x={elkNode.x} y={elkNode.y}
               width={elkNode.width} height={elkNode.height}
               fill="transparent"
-              style={{ cursor: 'text' }}
-              onDoubleClick={e => { e.stopPropagation(); openEdit(node) }}
+              style={{ cursor: hasUrl ? 'pointer' : 'text' }}
+              onClick={hasUrl ? (e) => { e.stopPropagation(); handleNodeClick(node) } : undefined}
+              onDoubleClick={canEdit ? (e) => { e.stopPropagation(); handleNodeDblClick(node) } : undefined}
             />
           )
         })}

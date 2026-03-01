@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { X, BookOpen, Link } from 'lucide-react'
 import { EXAMPLES, TYPE_COLORS, THEME_COLORS } from '../lib/examples.js'
+import { useT } from '../lib/i18n.jsx'
 
 const THEME_ICON = { clean: '☀️', handdrawn: '✏️', cyberpunk: '⚡' }
 
-export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
+export default function ExamplesPanel({ open, onClose, onLoad }) {
+  const t = useT()
   const panelRef = useRef(null)
   const [copiedSlug, setCopiedSlug] = useState(null)
 
@@ -22,45 +24,29 @@ export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
     const handler = (e) => {
       if (panelRef.current && !panelRef.current.contains(e.target)) onClose()
     }
-    // Delay so the opening click doesn't immediately close
     setTimeout(() => window.addEventListener('mousedown', handler), 50)
     return () => window.removeEventListener('mousedown', handler)
   }, [open, onClose])
 
   if (!open) return null
 
-  // Theme-aware palette
-  const isCyber = currentTheme === 'cyberpunk'
-  const isHand  = currentTheme === 'handdrawn'
-
-  const overlayBg   = isCyber ? 'bg-gray-950/80' : 'bg-slate-900/40'
-  const panelBg     = isCyber ? 'bg-gray-900 border border-cyan-800' : isHand ? 'bg-amber-50 border border-amber-200' : 'bg-white border border-slate-200'
-  const titleColor  = isCyber ? 'text-cyan-300' : isHand ? 'text-stone-800' : 'text-slate-800'
-  const subtitleColor = isCyber ? 'text-cyan-600' : isHand ? 'text-stone-500' : 'text-slate-500'
-  const cardBg      = isCyber ? 'bg-gray-800 hover:bg-gray-700 border-gray-700' : isHand ? 'bg-white hover:bg-amber-100 border-amber-200' : 'bg-slate-50 hover:bg-white border-slate-200'
-  const cardTitle   = isCyber ? 'text-cyan-100' : isHand ? 'text-stone-800' : 'text-slate-800'
-  const cardDesc    = isCyber ? 'text-gray-400' : isHand ? 'text-stone-500' : 'text-slate-500'
-  const closeBg     = isCyber ? 'hover:bg-gray-700 text-gray-400' : isHand ? 'hover:bg-amber-200 text-stone-500' : 'hover:bg-slate-100 text-slate-400'
-  const fontFamily  = isCyber ? '"Courier New", monospace' : isHand ? '"Segoe Print", cursive' : 'inherit'
-  const divider     = isCyber ? 'border-gray-700' : isHand ? 'border-amber-200' : 'border-slate-100'
-
   return (
-    <div className={`fixed inset-0 z-50 flex items-start justify-center pt-16 px-4 ${overlayBg} backdrop-blur-sm`}>
+    <div className="fixed inset-0 z-50 flex items-start justify-center pt-16 px-4 bg-slate-900/40 backdrop-blur-sm">
       <div
         ref={panelRef}
-        className={`w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden ${panelBg}`}
-        style={{ fontFamily, maxHeight: 'calc(100vh - 8rem)' }}
+        className="w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden bg-white border border-slate-200"
+        style={{ maxHeight: 'calc(100vh - 8rem)' }}
       >
         {/* Header */}
-        <div className={`flex items-center justify-between px-5 py-4 border-b ${divider}`}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
-            <BookOpen size={16} className={subtitleColor} />
-            <span className={`font-bold text-base ${titleColor}`}>Ejemplos</span>
-            <span className={`text-xs ${subtitleColor}`}>— {EXAMPLES.length} diagramas listos para usar</span>
+            <BookOpen size={16} className="text-slate-500" />
+            <span className="font-bold text-base text-slate-800">{t('examples_title')}</span>
+            <span className="text-xs text-slate-500">— {t('examples_count', EXAMPLES.length)}</span>
           </div>
           <button
             onClick={onClose}
-            className={`p-1.5 rounded-lg transition-colors ${closeBg}`}
+            className="p-1.5 rounded-lg transition-colors hover:bg-slate-100 text-slate-400"
           >
             <X size={16} />
           </button>
@@ -72,7 +58,7 @@ export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
             {EXAMPLES.map((ex) => (
               <div
                 key={ex.id}
-                className={`group relative rounded-lg border p-4 transition-all shadow-sm hover:shadow-md cursor-pointer ${cardBg}`}
+                className="group relative rounded-lg border p-4 transition-all shadow-sm hover:shadow-md cursor-pointer bg-slate-50 hover:bg-white border-slate-200"
                 onClick={() => { onLoad(ex.dsl); onClose() }}
               >
                 {/* Copy link button */}
@@ -85,15 +71,15 @@ export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
                       setTimeout(() => setCopiedSlug(null), 2000)
                     })
                   }}
-                  className={`absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity ${closeBg}`}
-                  title="Copiar enlace"
+                  className="absolute top-2 right-2 p-1 rounded opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity hover:bg-slate-100 text-slate-400"
+                  title={t('examples_copy_link')}
                 >
                   <Link size={11} />
                 </button>
 
                 {/* Number + badges */}
                 <div className="flex items-start justify-between gap-2 mb-2 pr-4">
-                  <span className={`text-xs font-mono opacity-40 ${cardTitle}`}>{ex.id}</span>
+                  <span className="text-xs font-mono opacity-40 text-slate-800">{ex.id}</span>
                   <div className="flex items-center gap-1 flex-wrap justify-end">
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${TYPE_COLORS[ex.type] ?? 'bg-gray-100 text-gray-600'}`}>
                       {ex.type}
@@ -105,15 +91,15 @@ export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
                 </div>
 
                 {/* Title */}
-                <div className={`font-semibold text-sm mb-1 ${cardTitle}`}>{ex.title}</div>
+                <div className="font-semibold text-sm mb-1 text-slate-800">{ex.title}</div>
 
                 {/* Description */}
-                <div className={`text-xs leading-relaxed ${cardDesc}`}>{ex.description}</div>
+                <div className="text-xs leading-relaxed text-slate-500">{ex.description}</div>
 
                 {/* Copied feedback */}
                 {copiedSlug === ex.slug && (
                   <div className={`absolute bottom-2 right-2 text-xs px-2 py-0.5 rounded ${TYPE_COLORS['Flowchart']}`}>
-                    ¡Copiado!
+                    {t('examples_link_copied')}
                   </div>
                 )}
               </div>
@@ -122,8 +108,8 @@ export default function ExamplesPanel({ open, onClose, onLoad, currentTheme }) {
         </div>
 
         {/* Footer hint */}
-        <div className={`px-5 py-3 border-t ${divider} ${subtitleColor} text-xs`}>
-          Haz clic en cualquier ejemplo para cargarlo en el editor
+        <div className="px-5 py-3 border-t border-slate-100 text-slate-500 text-xs">
+          {t('examples_footer')}
         </div>
       </div>
     </div>

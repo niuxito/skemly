@@ -1,4 +1,4 @@
-// Vibedrawing DSL Parser v1.1
+// Skemly DSL Parser v1.1
 // Spec: CLAUDE.md
 
 // ─── ID normalization ──────────────────────────────────────────────────────────
@@ -367,9 +367,15 @@ export function parseDSL(rawInput) {
           if (['danger', 'safe', 'info', 'warning'].includes(tagStr)) tags.push(tagStr)
         }
 
-        // Read optional @attr= outside brackets: [Node]@icon=X@bg=Y@color=Z (any order)
-        let outerIcon = null, outerBgColor = null, outerTextColor = null
-        while (i < len && line[i] === '@') {
+        // Read optional @attr= outside brackets: [Node]@icon=X@bg=Y@color=Z@url=... (any order)
+        // Skip any spaces before attributes so "[Node] @bg=red" works like "[Node]@bg=red"
+        while (i < len && line[i] === ' ') i++
+        let outerIcon = null, outerBgColor = null, outerTextColor = null, outerUrl = null
+        while (i < len && (line[i] === '@' || line[i] === ' ')) {
+          if (line[i] === ' ') { i++; continue } // skip spaces between attributes
+          // @url= needs broader char class (allows ://.?&=%-_~#)
+          const urlM = line.slice(i).match(/^@url=(https?:\/\/[^\s,\])}>"]+)/)
+          if (urlM) { outerUrl = urlM[1]; i += urlM[0].length; continue }
           const m = line.slice(i).match(/^@(icon|bg|color)=([\w#]+)/)
           if (!m) break
           const [full, attr, val] = m
@@ -407,6 +413,7 @@ export function parseDSL(rawInput) {
         nodes.push({ id_key, label, shape, tags, icon, bold, underline,
           bgColor: outerBgColor ?? null,
           textColor: outerTextColor ?? null,
+          url: outerUrl ?? null,
         })
         return true
       }

@@ -1,4 +1,4 @@
-// Theme definitions for Vibedrawing
+// Theme definitions for Skemly
 
 export const THEMES = {
   clean: {
@@ -29,15 +29,16 @@ export const THEMES = {
   handdrawn: {
     bg: '#fffdf7',
     canvasBg: '#fdf8ed',
-    nodeFill: '#fffdf7',
+    nodeFill: '#ffffff',
     nodeStroke: '#2d2d2d',
-    nodeStrokeWidth: 2,
+    nodeStrokeWidth: 2.5,
     nodeText: '#1a1a1a',
     edgeStroke: '#2d2d2d',
     edgeStrokeWidth: 2,
     arrowFill: '#2d2d2d',
-    groupFill: 'rgba(253,248,237,0.9)',
-    groupStroke: '#555',
+    groupFill: '#ffffff',
+    groupFillOpacity: 0.4,
+    groupStroke: '#444',
     groupText: '#333',
     labelText: '#444',
     font: '"Segoe Print", "Comic Sans MS", cursive',

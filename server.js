@@ -121,6 +121,6 @@ createServer(async (req, res) => {
     await handleStatic(req, res)
   }
 }).listen(PORT, () => {
-  console.log(`Vibedrawing server running at http://localhost:${PORT}`)
+  console.log(`Skemly server running at http://localhost:${PORT}`)
   if (!API_KEY) console.warn('  WARNING: ANTHROPIC_API_KEY is not set — AI Chat will return errors')
 })
