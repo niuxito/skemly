@@ -14,6 +14,10 @@ export default {
   untitled: 'Untitled',
   rename_diagram: 'Rename diagram',
   delete_session: 'Delete session',
+  loading_diagrams: 'Loading your diagrams…',
+  anon_import_banner: (n) => n === 1 ? 'You have 1 unsaved diagram from before signing in.' : `You have ${n} unsaved diagrams from before signing in.`,
+  anon_import_btn: 'Import',
+  anon_import_dismiss: 'Dismiss',
 
   // Tabs
   tab_editor: 'DSL Editor',

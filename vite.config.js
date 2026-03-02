@@ -10,6 +10,7 @@ import meHandler from './api/auth/me.js'
 import verifyOtpHandler from './api/auth/verify-otp.js'
 import resendVerificationHandler from './api/auth/resend-verification.js'
 import shareHandler from './api/share.js'
+import sessionsHandler from './api/sessions.js'
 
 /**
  * Wraps Vite's raw Node http req/res into the Vercel-style interface
@@ -55,6 +56,23 @@ function sharePlugin() {
         const query = Object.fromEntries(url.searchParams.entries())
         runAuthHandler(
           (vReq, vRes) => shareHandler({ ...vReq, query }, vRes),
+          req,
+          res,
+        )
+      })
+    },
+  }
+}
+
+function sessionsPlugin() {
+  return {
+    name: 'sessions-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/sessions', (req, res) => {
+        const url = new URL(req.url, 'http://x')
+        const query = Object.fromEntries(url.searchParams.entries())
+        runAuthHandler(
+          (vReq, vRes) => sessionsHandler({ ...vReq, query }, vRes),
           req,
           res,
         )
@@ -227,6 +245,7 @@ export default defineConfig(({ mode }) => {
       tailwindcss(),
       authPlugin(),
       sharePlugin(),
+      sessionsPlugin(),
       anthropicProxyPlugin(
         env.ANTHROPIC_API_KEY,
         env.DATABASE_URL,

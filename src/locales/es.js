@@ -14,6 +14,10 @@ export default {
   untitled: 'Sin título',
   rename_diagram: 'Renombrar diagrama',
   delete_session: 'Eliminar sesión',
+  loading_diagrams: 'Cargando tus diagramas…',
+  anon_import_banner: (n) => n === 1 ? 'Tienes 1 diagrama anónimo sin guardar.' : `Tienes ${n} diagramas anónimos sin guardar.`,
+  anon_import_btn: 'Importar',
+  anon_import_dismiss: 'Descartar',
 
   // Tabs
   tab_editor: 'Editor DSL',

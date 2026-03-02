@@ -12,31 +12,28 @@ import AuthModal from './components/AuthModal.jsx'
 import { useI18n, useT } from './lib/i18n.jsx'
 
 // ─── Session helpers ──────────────────────────────────────────────────────────
-const SESSIONS_KEY = 'vibediag_sessions'
-const ACTIVE_KEY   = 'vibediag_active'
+const isPaid = (user) => user?.plan === 'pro' || user?.plan === 'starter'
+const sessionsKey = (userId) => userId ? `vibediag_sessions_${userId}` : 'vibediag_sessions'
+const activeKey   = (userId) => userId ? `vibediag_active_${userId}`   : 'vibediag_active'
 
-function uid() {
-  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
-}
-
-function loadSessions() {
+function loadSessions(key) {
   try {
-    const raw = localStorage.getItem(SESSIONS_KEY)
+    const raw = localStorage.getItem(key ?? 'vibediag_sessions')
     return raw ? JSON.parse(raw) : []
   } catch {
     return []
   }
 }
 
-function saveSessionsToStorage(sessions) {
+function saveSessionsToStorage(sessions, key) {
   try {
-    localStorage.setItem(SESSIONS_KEY, JSON.stringify(sessions))
+    localStorage.setItem(key ?? 'vibediag_sessions', JSON.stringify(sessions))
   } catch { /* quota exceeded – skip */ }
 }
 
 function createSession(dsl = '', title = 'Nueva sesión') {
   return {
-    id: uid(),
+    id: crypto.randomUUID(),
     title,
     dsl,
     messages: [],
@@ -44,6 +41,46 @@ function createSession(dsl = '', title = 'Nueva sesión') {
     createdAt: Date.now(),
     updatedAt: Date.now(),
   }
+}
+
+// ─── DB helpers (pro/starter users) ──────────────────────────────────────────
+async function postSessionToDB(session) {
+  const token = localStorage.getItem('vibediag_token')
+  await fetch('/api/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      id: session.id,
+      title: session.title,
+      dsl: session.dsl,
+      messages: session.messages,
+      chatHistory: session.chatHistory,
+      titleManual: session.titleManual,
+    }),
+  })
+}
+
+async function putSessionToDB(session) {
+  const token = localStorage.getItem('vibediag_token')
+  await fetch(`/api/sessions?id=${encodeURIComponent(session.id)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      title: session.title,
+      dsl: session.dsl,
+      messages: session.messages,
+      chatHistory: session.chatHistory,
+      titleManual: session.titleManual,
+    }),
+  })
+}
+
+async function deleteSessionFromDB(id) {
+  const token = localStorage.getItem('vibediag_token')
+  await fetch(`/api/sessions?id=${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  })
 }
 
 function deriveTitle(dsl, messages, untitled = 'Sin título') {
@@ -157,7 +194,7 @@ const VIBES = [
 
 function VibeBar({ current, onChange }) {
   return (
-    <div className="absolute top-2 right-2 z-10 flex items-center gap-0.5 bg-white/85 backdrop-blur-sm rounded-lg border border-slate-200 p-0.5 shadow-sm">
+    <div className="absolute bottom-2 left-2 z-10 flex items-center gap-0.5 bg-white/85 backdrop-blur-sm rounded-lg border border-slate-200 p-0.5 shadow-sm">
       {VIBES.map(({ key, icon, label }) => (
         <button
           key={key}
@@ -205,13 +242,13 @@ export default function App() {
 
   // ─── Sessions state ──────────────────────────────────────────────────────
   const [sessions, setSessions] = useState(() => {
-    const saved = loadSessions()
+    const saved = loadSessions(sessionsKey(null))
     return saved.length ? saved : [createSession(DEFAULT_DSL)]
   })
   const [activeSessionId, setActiveSessionId] = useState(() => {
-    const saved = loadSessions()
+    const saved = loadSessions(sessionsKey(null))
     if (saved.length) {
-      const storedId = localStorage.getItem(ACTIVE_KEY)
+      const storedId = localStorage.getItem(activeKey(null))
       return saved.find(s => s.id === storedId) ? storedId : saved[0].id
     }
     return null
@@ -223,17 +260,26 @@ export default function App() {
 
   // ─── Auth state ───────────────────────────────────────────────────────────
   const [user, setUser] = useState(null)
+  const [authResolved, setAuthResolved] = useState(false)
+  const [cloudLoading, setCloudLoading] = useState(false)
+  const [anonToImport, setAnonToImport] = useState(null)
   const [authOpen, setAuthOpen] = useState(false)
   const [authDefaultTab, setAuthDefaultTab] = useState('login')
   const [authDefaultEmail, setAuthDefaultEmail] = useState('')
 
   useEffect(() => {
     const token = localStorage.getItem('vibediag_token')
-    if (!token) return
+    if (!token) {
+      setAuthResolved(true)
+      return
+    }
     fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
       .then(r => r.ok ? r.json() : null)
-      .then(data => { if (data?.user) setUser(data.user) })
-      .catch(() => {})
+      .then(data => {
+        if (data?.user) setUser(data.user)
+        setAuthResolved(true)
+      })
+      .catch(() => { setAuthResolved(true) })
   }, [])
 
   function handleAuthSuccess({ token, user: u }) {
@@ -248,6 +294,7 @@ export default function App() {
   function handleLogout() {
     localStorage.removeItem('vibediag_token')
     setUser(null)
+    // sessions loading effect will re-run with user=null → loads anonymous sessions
   }
 
   function openAuthModal(tab = 'login', email = '') {
@@ -316,7 +363,10 @@ export default function App() {
     setHistoryOpen(false)
     setActiveTab('chat')
     setMobileView('chat')
-  }, [t])
+    if (isPaid(user)) {
+      postSessionToDB(s).catch(() => {})
+    }
+  }, [t, user])
 
   const handleSwitchSession = useCallback((id) => {
     setActiveSessionId(id)
@@ -338,6 +388,20 @@ export default function App() {
     setEditingSessionTitle(false)
   }, [sessionTitleDraft, updateCurrentSession])
 
+  const handleImportAnon = useCallback(() => {
+    if (!anonToImport?.length) return
+    setSessions(prev => {
+      const merged = [...anonToImport, ...prev]
+      if (isPaid(user)) {
+        anonToImport.forEach(s => postSessionToDB(s).catch(() => {}))
+      }
+      return merged
+    })
+    localStorage.removeItem(sessionsKey(null))
+    localStorage.removeItem(activeKey(null))
+    setAnonToImport(null)
+  }, [anonToImport, user])
+
   const handleDeleteSession = useCallback((id) => {
     setSessions(prev => {
       const next = prev.filter(s => s.id !== id)
@@ -345,6 +409,9 @@ export default function App() {
         const fresh = createSession('')
         setActiveSessionId(fresh.id)
         setHistoryOpen(false)
+        if (isPaid(user)) {
+          postSessionToDB(fresh).catch(() => {})
+        }
         return [fresh]
       }
       if (id === activeSessionId) {
@@ -352,7 +419,10 @@ export default function App() {
       }
       return next
     })
-  }, [activeSessionId])
+    if (isPaid(user)) {
+      deleteSessionFromDB(id).catch(() => {})
+    }
+  }, [activeSessionId, user])
 
   // ─── Vibe change ─────────────────────────────────────────────────────────
   const handleVibeChange = useCallback((key) => {
@@ -364,14 +434,118 @@ export default function App() {
     }
   }, [dsl, updateCurrentSession])
 
-  // ─── localStorage persistence ─────────────────────────────────────────────
+  // ─── Load sessions when auth resolves / user changes ────────────────────
   useEffect(() => {
-    saveSessionsToStorage(sessions)
-  }, [sessions])
+    if (!authResolved) return
+
+    // Reset any pending import offer from a previous login
+    setAnonToImport(null)
+
+    // Anonymous sessions that have actual content (skip pristine empties)
+    const anonSessions = user
+      ? loadSessions(sessionsKey(null)).filter(s => s.dsl?.trim() || s.messages?.length)
+      : []
+
+    function clearAnonStore() {
+      localStorage.removeItem(sessionsKey(null))
+      localStorage.removeItem(activeKey(null))
+    }
+
+    if (!isPaid(user)) {
+      const key = sessionsKey(user?.id)
+      const saved = loadSessions(key)
+      const storedActiveId = localStorage.getItem(activeKey(user?.id))
+
+      if (saved.length) {
+        setSessions(saved)
+        setActiveSessionId(saved.find(s => s.id === storedActiveId) ? storedActiveId : saved[0].id)
+        // Destination occupied: offer import as optional banner
+        if (anonSessions.length) setAnonToImport(anonSessions)
+      } else if (anonSessions.length) {
+        // Destination empty: auto-migrate silently
+        setSessions(anonSessions)
+        setActiveSessionId(anonSessions[0].id)
+        clearAnonStore()
+      } else {
+        const s = createSession(user ? '' : DEFAULT_DSL)
+        setSessions([s])
+        setActiveSessionId(s.id)
+      }
+    } else {
+      setCloudLoading(true)
+      const token = localStorage.getItem('vibediag_token')
+      fetch('/api/sessions', { headers: { Authorization: `Bearer ${token}` } })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          setCloudLoading(false)
+          const dbSessions = data?.sessions ?? []
+
+          if (dbSessions.length) {
+            setSessions(dbSessions)
+            const storedActiveId = localStorage.getItem(activeKey(user.id))
+            const found = dbSessions.find(s => s.id === storedActiveId)
+            setActiveSessionId(found ? storedActiveId : dbSessions[0].id)
+            // Destination occupied: offer import as optional banner
+            if (anonSessions.length) setAnonToImport(anonSessions)
+          } else if (anonSessions.length) {
+            // Destination empty: auto-migrate silently to DB
+            setSessions(anonSessions)
+            setActiveSessionId(anonSessions[0].id)
+            Promise.all(anonSessions.map(s => postSessionToDB(s))).catch(() => {})
+            clearAnonStore()
+          } else {
+            const s = createSession('', t('default_session_title'))
+            setSessions([s])
+            setActiveSessionId(s.id)
+            postSessionToDB(s).catch(() => {})
+          }
+        })
+        .catch(() => {
+          setCloudLoading(false)
+          // Network error: fallback to localStorage
+          const key = sessionsKey(user.id)
+          const saved = loadSessions(key)
+          const storedActiveId = localStorage.getItem(activeKey(user.id))
+          if (saved.length) {
+            setSessions(saved)
+            setActiveSessionId(saved.find(s => s.id === storedActiveId) ? storedActiveId : saved[0].id)
+            if (anonSessions.length) setAnonToImport(anonSessions)
+          } else if (anonSessions.length) {
+            setSessions(anonSessions)
+            setActiveSessionId(anonSessions[0].id)
+            clearAnonStore()
+          } else {
+            const s = createSession('')
+            setSessions([s])
+            setActiveSessionId(s.id)
+          }
+        })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authResolved, user?.id, user?.plan])
+
+  // ─── Persist sessions to localStorage (non-pro users) ────────────────────
+  useEffect(() => {
+    if (!authResolved || cloudLoading) return
+    if (!isPaid(user)) {
+      saveSessionsToStorage(sessions, sessionsKey(user?.id))
+    }
+  }, [sessions, user?.plan, user?.id, authResolved, cloudLoading])
 
   useEffect(() => {
-    if (activeSessionId) localStorage.setItem(ACTIVE_KEY, activeSessionId)
-  }, [activeSessionId])
+    if (activeSessionId) localStorage.setItem(activeKey(user?.id), activeSessionId)
+  }, [activeSessionId, user?.id])
+
+  // ─── Debounced sync to DB for pro/starter ────────────────────────────────
+  useEffect(() => {
+    if (!isPaid(user) || !currentSession || cloudLoading) return
+    const snap = currentSession
+    const timer = setTimeout(() => {
+      putSessionToDB(snap).catch(() => {})
+    }, 1500)
+    return () => clearTimeout(timer)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSession?.dsl, currentSession?.messages?.length, currentSession?.title, currentSession?.titleManual])
 
   // ─── Load example via /examples/:slug URL ────────────────────────────────
   useEffect(() => {
@@ -766,6 +940,32 @@ export default function App() {
         </div>
       )}
 
+      {/* ─── Anonymous import banner ─────────────────────────────────────── */}
+      {anonToImport?.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-1.5 text-xs shrink-0 bg-blue-50 border-b border-blue-200 text-blue-800">
+          <span>{t('anon_import_banner', anonToImport.length)}</span>
+          <div className="flex items-center gap-3 ml-2 shrink-0">
+            <button
+              onClick={handleImportAnon}
+              className="underline font-medium hover:opacity-70 transition-opacity"
+            >
+              {t('anon_import_btn')}
+            </button>
+            <button
+              onClick={() => {
+                localStorage.removeItem(sessionsKey(null))
+                localStorage.removeItem(activeKey(null))
+                setAnonToImport(null)
+              }}
+              className="opacity-50 hover:opacity-80 transition-opacity leading-none text-sm font-medium"
+              title={t('anon_import_dismiss')}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
+
       {isMobile ? (
         /* ─── Mobile layout ──────────────────────────────────────────────── */
         <div className="flex flex-col flex-1 overflow-hidden">
@@ -820,33 +1020,36 @@ export default function App() {
                 className="absolute top-full left-0 right-0 z-50 border-b shadow-lg overflow-y-auto bg-white border-slate-200"
                 style={{ maxHeight: 240 }}
               >
-                {[...sessions]
-                  .sort((a, b) => b.updatedAt - a.updatedAt)
-                  .map(session => (
-                    <div
-                      key={session.id}
-                      onClick={() => handleSwitchSession(session.id)}
-                      className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer transition-opacity text-slate-800 ${
-                        session.id === (activeSessionId ?? sessions[0]?.id)
-                          ? 'font-semibold bg-slate-100'
-                          : 'opacity-60 hover:opacity-100'
-                      }`}
-                    >
-                      {session.id === (activeSessionId ?? sessions[0]?.id) && (
-                        <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
-                      )}
-                      <span className="flex-1 truncate">{session.title}</span>
-                      <span className="shrink-0 opacity-40 text-[10px]">{relativeTime(session.updatedAt, t)}</span>
-                      <button
-                        onClick={e => { e.stopPropagation(); handleDeleteSession(session.id) }}
-                        className="shrink-0 opacity-40 hover:opacity-100 leading-none text-sm font-medium ml-1"
-                        title={t('delete_session')}
+                {cloudLoading ? (
+                  <div className="px-3 py-3 text-xs text-slate-400 text-center">{t('loading_diagrams')}</div>
+                ) : (
+                  [...sessions]
+                    .sort((a, b) => b.updatedAt - a.updatedAt)
+                    .map(session => (
+                      <div
+                        key={session.id}
+                        onClick={() => handleSwitchSession(session.id)}
+                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer transition-opacity text-slate-800 ${
+                          session.id === (activeSessionId ?? sessions[0]?.id)
+                            ? 'font-semibold bg-slate-100'
+                            : 'opacity-60 hover:opacity-100'
+                        }`}
                       >
-                        ×
-                      </button>
-                    </div>
-                  ))
-                }
+                        {session.id === (activeSessionId ?? sessions[0]?.id) && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+                        )}
+                        <span className="flex-1 truncate">{session.title}</span>
+                        <span className="shrink-0 opacity-40 text-[10px]">{relativeTime(session.updatedAt, t)}</span>
+                        <button
+                          onClick={e => { e.stopPropagation(); handleDeleteSession(session.id) }}
+                          className="shrink-0 opacity-40 hover:opacity-100 leading-none text-sm font-medium ml-1"
+                          title={t('delete_session')}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))
+                )}
               </div>
             )}
           </div>
@@ -989,33 +1192,36 @@ export default function App() {
                   className="absolute top-full left-0 right-0 z-50 border-b shadow-lg overflow-y-auto bg-white border-slate-200"
                   style={{ maxHeight: 240 }}
                 >
-                  {[...sessions]
-                    .sort((a, b) => b.updatedAt - a.updatedAt)
-                    .map(session => (
-                      <div
-                        key={session.id}
-                        onClick={() => handleSwitchSession(session.id)}
-                        className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer transition-opacity text-slate-800 ${
-                          session.id === (activeSessionId ?? sessions[0]?.id)
-                            ? 'font-semibold bg-slate-100'
-                            : 'opacity-60 hover:opacity-100'
-                        }`}
-                      >
-                        {session.id === (activeSessionId ?? sessions[0]?.id) && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
-                        )}
-                        <span className="flex-1 truncate">{session.title}</span>
-                        <span className="shrink-0 opacity-40 text-[10px]">{relativeTime(session.updatedAt, t)}</span>
-                        <button
-                          onClick={e => { e.stopPropagation(); handleDeleteSession(session.id) }}
-                          className="shrink-0 opacity-40 hover:opacity-100 leading-none text-sm font-medium ml-1"
-                          title={t('delete_session')}
+                  {cloudLoading ? (
+                    <div className="px-3 py-3 text-xs text-slate-400 text-center">{t('loading_diagrams')}</div>
+                  ) : (
+                    [...sessions]
+                      .sort((a, b) => b.updatedAt - a.updatedAt)
+                      .map(session => (
+                        <div
+                          key={session.id}
+                          onClick={() => handleSwitchSession(session.id)}
+                          className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer transition-opacity text-slate-800 ${
+                            session.id === (activeSessionId ?? sessions[0]?.id)
+                              ? 'font-semibold bg-slate-100'
+                              : 'opacity-60 hover:opacity-100'
+                          }`}
                         >
-                          ×
-                        </button>
-                      </div>
-                    ))
-                  }
+                          {session.id === (activeSessionId ?? sessions[0]?.id) && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-current shrink-0" />
+                          )}
+                          <span className="flex-1 truncate">{session.title}</span>
+                          <span className="shrink-0 opacity-40 text-[10px]">{relativeTime(session.updatedAt, t)}</span>
+                          <button
+                            onClick={e => { e.stopPropagation(); handleDeleteSession(session.id) }}
+                            className="shrink-0 opacity-40 hover:opacity-100 leading-none text-sm font-medium ml-1"
+                            title={t('delete_session')}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                  )}
                 </div>
               )}
             </div>
