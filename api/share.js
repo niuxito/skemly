@@ -1,4 +1,5 @@
 import { neon } from '@neondatabase/serverless'
+import { checkAndIncrementShareAttempt } from './_rateLimit.js'
 
 function generateShortId(length = 6) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
@@ -48,6 +49,27 @@ export default async function handler(req, res) {
     const { dsl, title } = req.body ?? {}
     if (!dsl) {
       return res.status(400).json({ error: 'Missing dsl' })
+    }
+
+    // Payload size validation
+    if (dsl.length > 50_000) {
+      return res.status(400).json({ error: 'DSL too large (max 50 000 characters)' })
+    }
+    if (title && title.length > 200) {
+      return res.status(400).json({ error: 'Title too long (max 200 characters)' })
+    }
+
+    // Rate limiting by IP
+    const ip = (req.headers?.['x-forwarded-for'] ?? '127.0.0.1').split(',')[0].trim()
+    const rl = await checkAndIncrementShareAttempt({ ip, databaseUrl })
+    if (!rl.allowed) {
+      return res.status(429).json({
+        error: {
+          type: 'share_rate_limit_exceeded',
+          message: 'Too many shared diagrams today. Try again tomorrow.',
+          reset_at: rl.resetAt,
+        },
+      })
     }
 
     const slug = titleToSlug(title)

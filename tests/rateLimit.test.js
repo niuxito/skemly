@@ -15,7 +15,7 @@ vi.mock('@neondatabase/serverless', () => {
 })
 
 // Import after mock is registered
-import { checkRateLimit, checkFileRateLimit, checkLoginAttempts, incrementLoginAttempt, checkAndIncrementOtpAttempt, checkAndIncrementRegisterAttempt } from '../api/_rateLimit.js'
+import { checkRateLimit, checkFileRateLimit, checkLoginAttempts, incrementLoginAttempt, checkAndIncrementOtpAttempt, checkAndIncrementRegisterAttempt, checkAndIncrementShareAttempt } from '../api/_rateLimit.js'
 import { _mockSql } from '@neondatabase/serverless'
 
 beforeEach(() => {
@@ -189,6 +189,41 @@ describe('checkAndIncrementRegisterAttempt', () => {
   it('DB error → fail open {allowed:true, remaining:null}', async () => {
     _mockSql.mockRejectedValue(new Error('timeout'))
     const result = await checkAndIncrementRegisterAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake' })
+    expect(result).toEqual({ allowed: true, remaining: null })
+  })
+})
+
+// ─── checkAndIncrementShareAttempt ───────────────────────────────────────────
+
+describe('checkAndIncrementShareAttempt', () => {
+  it('returns {allowed:true, remaining:null} when no databaseUrl', async () => {
+    const result = await checkAndIncrementShareAttempt({ ip: '1.2.3.4', databaseUrl: undefined })
+    expect(result).toEqual({ allowed: true, remaining: null })
+  })
+
+  it('share_count=10 with limit=50 → {allowed:true, remaining:40}', async () => {
+    _mockSql.mockResolvedValue([{ share_count: 10 }])
+    const result = await checkAndIncrementShareAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 50 })
+    expect(result).toEqual({ allowed: true, remaining: 40 })
+  })
+
+  it('share_count=50 with limit=50 → {allowed:true, remaining:0} (exact limit still allowed)', async () => {
+    _mockSql.mockResolvedValue([{ share_count: 50 }])
+    const result = await checkAndIncrementShareAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 50 })
+    expect(result).toEqual({ allowed: true, remaining: 0 })
+  })
+
+  it('share_count=51 with limit=50 → {allowed:false, limit:50}', async () => {
+    _mockSql.mockResolvedValue([{ share_count: 51 }])
+    const result = await checkAndIncrementShareAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 50 })
+    expect(result.allowed).toBe(false)
+    expect(result.limit).toBe(50)
+    expect(typeof result.resetAt).toBe('string')
+  })
+
+  it('DB error → fail open {allowed:true, remaining:null}', async () => {
+    _mockSql.mockRejectedValue(new Error('timeout'))
+    const result = await checkAndIncrementShareAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake' })
     expect(result).toEqual({ allowed: true, remaining: null })
   })
 })
