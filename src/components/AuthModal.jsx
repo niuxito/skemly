@@ -103,6 +103,7 @@ export default function AuthModal({
         setResendCooldown(60)
       } else {
         onAuthSuccess({ token: data.token, user: data.user })
+        onClose()
       }
     } catch {
       setError(t('auth_error_connection'))
