@@ -152,7 +152,9 @@ function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, f
         // ─── File attachment validation & rate limiting ─────────────────────
         const { attachment } = parsedBody
         if (attachment) {
-          if (attachment.size > fileMaxSize) {
+          // Compute actual size from base64 data — ignore client-supplied `size` field
+          const actualBytes = Math.ceil((attachment.data?.length ?? 0) * 0.75)
+          if (actualBytes > fileMaxSize) {
             res.statusCode = 400
             res.setHeader('Content-Type', 'application/json')
             res.end(JSON.stringify({

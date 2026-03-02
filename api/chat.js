@@ -50,7 +50,9 @@ export default async function handler(req, res) {
   // ─── File attachment validation & rate limiting ───────────────────────────
   const { attachment } = req.body
   if (attachment) {
-    if (attachment.size > FILE_MAX_SIZE) {
+    // Compute actual size from base64 data — ignore client-supplied `size` field
+    const actualBytes = Math.ceil((attachment.data?.length ?? 0) * 0.75)
+    if (actualBytes > FILE_MAX_SIZE) {
       return res.status(400).json({
         error: {
           type: 'file_too_large',
