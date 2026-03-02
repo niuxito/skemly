@@ -15,7 +15,7 @@ vi.mock('@neondatabase/serverless', () => {
 })
 
 // Import after mock is registered
-import { checkRateLimit, checkFileRateLimit } from '../api/_rateLimit.js'
+import { checkRateLimit, checkFileRateLimit, checkLoginAttempts, incrementLoginAttempt, checkAndIncrementOtpAttempt } from '../api/_rateLimit.js'
 import { _mockSql } from '@neondatabase/serverless'
 
 beforeEach(() => {
@@ -92,5 +92,68 @@ describe('checkFileRateLimit', () => {
     _mockSql.mockResolvedValue([])
     const result = await checkFileRateLimit({ ip: '9.9.9.9', databaseUrl: 'postgres://fake', dailyLimit: 5 })
     expect(result).toEqual({ allowed: true, remaining: 5 })
+  })
+})
+
+// ─── checkLoginAttempts ───────────────────────────────────────────────────────
+
+describe('checkLoginAttempts', () => {
+  it('returns {allowed:true, remaining:null} when no databaseUrl', async () => {
+    const result = await checkLoginAttempts({ ip: '1.2.3.4', databaseUrl: undefined })
+    expect(result).toEqual({ allowed: true, remaining: null })
+  })
+
+  it('login_count=5 with limit=20 → {allowed:true, remaining:15}', async () => {
+    _mockSql.mockResolvedValue([{ login_count: 5 }])
+    const result = await checkLoginAttempts({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 20 })
+    expect(result).toEqual({ allowed: true, remaining: 15 })
+  })
+
+  it('login_count=20 with limit=20 → {allowed:false}', async () => {
+    _mockSql.mockResolvedValue([{ login_count: 20 }])
+    const result = await checkLoginAttempts({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 20 })
+    expect(result.allowed).toBe(false)
+    expect(result.limit).toBe(20)
+    expect(typeof result.resetAt).toBe('string')
+  })
+
+  it('empty rows (new IP) → {allowed:true, remaining:20}', async () => {
+    _mockSql.mockResolvedValue([])
+    const result = await checkLoginAttempts({ ip: '9.9.9.9', databaseUrl: 'postgres://fake', limit: 20 })
+    expect(result).toEqual({ allowed: true, remaining: 20 })
+  })
+
+  it('DB error → fail open {allowed:true, remaining:null}', async () => {
+    _mockSql.mockRejectedValue(new Error('timeout'))
+    const result = await checkLoginAttempts({ ip: '1.2.3.4', databaseUrl: 'postgres://fake' })
+    expect(result).toEqual({ allowed: true, remaining: null })
+  })
+})
+
+// ─── checkAndIncrementOtpAttempt ─────────────────────────────────────────────
+
+describe('checkAndIncrementOtpAttempt', () => {
+  it('returns {allowed:true, remaining:null} when no databaseUrl', async () => {
+    const result = await checkAndIncrementOtpAttempt({ ip: '1.2.3.4', databaseUrl: undefined })
+    expect(result).toEqual({ allowed: true, remaining: null })
+  })
+
+  it('otp_count=3 with limit=10 → {allowed:true, remaining:7}', async () => {
+    _mockSql.mockResolvedValue([{ otp_count: 3 }])
+    const result = await checkAndIncrementOtpAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 10 })
+    expect(result).toEqual({ allowed: true, remaining: 7 })
+  })
+
+  it('otp_count=11 with limit=10 → {allowed:false}', async () => {
+    _mockSql.mockResolvedValue([{ otp_count: 11 }])
+    const result = await checkAndIncrementOtpAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 10 })
+    expect(result.allowed).toBe(false)
+    expect(result.limit).toBe(10)
+  })
+
+  it('DB error → fail open {allowed:true, remaining:null}', async () => {
+    _mockSql.mockRejectedValue(new Error('timeout'))
+    const result = await checkAndIncrementOtpAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake' })
+    expect(result).toEqual({ allowed: true, remaining: null })
   })
 })

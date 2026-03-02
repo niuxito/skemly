@@ -1,4 +1,6 @@
 import { neon } from '@neondatabase/serverless'
+import { timingSafeEqual } from 'crypto'
+import { checkAndIncrementOtpAttempt } from '../_rateLimit.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -15,6 +17,19 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Database not configured' })
   }
 
+  // ─── OTP rate limiting by IP ────────────────────────────────────────────
+  const ip = (req.headers?.['x-forwarded-for'] ?? '127.0.0.1').split(',')[0].trim()
+  const rl = await checkAndIncrementOtpAttempt({ ip, databaseUrl })
+  if (!rl.allowed) {
+    return res.status(429).json({
+      error: {
+        type: 'otp_rate_limit_exceeded',
+        message: 'Demasiados intentos de verificación. Inténtalo de nuevo mañana.',
+        reset_at: rl.resetAt,
+      },
+    })
+  }
+
   const sql = neon(databaseUrl)
 
   const rows = await sql`
@@ -28,7 +43,15 @@ export default async function handler(req, res) {
 
   const user = rows[0]
 
-  if (!user.verify_otp || user.verify_otp !== otp.trim()) {
+  // Timing-safe OTP comparison (prevents timing attacks)
+  const otpTrimmed = otp.trim()
+  const storedOtp = user.verify_otp ?? ''
+  const match =
+    storedOtp.length > 0 &&
+    storedOtp.length === otpTrimmed.length &&
+    timingSafeEqual(Buffer.from(storedOtp), Buffer.from(otpTrimmed))
+
+  if (!match) {
     return res.status(400).json({ error: 'Código incorrecto' })
   }
 

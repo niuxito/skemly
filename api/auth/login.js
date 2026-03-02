@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import { comparePassword, signToken } from '../_auth.js'
+import { checkLoginAttempts, incrementLoginAttempt } from '../_rateLimit.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -17,6 +18,19 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: 'Database not configured' })
   }
 
+  // ─── Rate limiting by IP ────────────────────────────────────────────────
+  const ip = (req.headers?.['x-forwarded-for'] ?? '127.0.0.1').split(',')[0].trim()
+  const rl = await checkLoginAttempts({ ip, databaseUrl })
+  if (!rl.allowed) {
+    return res.status(429).json({
+      error: {
+        type: 'login_rate_limit_exceeded',
+        message: 'Demasiados intentos fallidos. Inténtalo de nuevo mañana.',
+        reset_at: rl.resetAt,
+      },
+    })
+  }
+
   const sql = neon(databaseUrl)
 
   const rows = await sql`SELECT id, email, name, password_hash FROM users WHERE email = ${email.toLowerCase()}`
@@ -25,6 +39,7 @@ export default async function handler(req, res) {
   const GENERIC_ERROR = 'Email o contraseña incorrectos'
 
   if (rows.length === 0) {
+    await incrementLoginAttempt({ ip, databaseUrl })
     return res.status(401).json({ error: GENERIC_ERROR })
   }
 
@@ -32,6 +47,7 @@ export default async function handler(req, res) {
   const valid = await comparePassword(password, user.password_hash)
 
   if (!valid) {
+    await incrementLoginAttempt({ ip, databaseUrl })
     return res.status(401).json({ error: GENERIC_ERROR })
   }
 
