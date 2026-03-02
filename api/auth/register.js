@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless'
 import { hashPassword, signToken, generateOtp } from '../_auth.js'
 import { sendVerificationEmail } from '../_email.js'
+import { checkAndIncrementRegisterAttempt } from '../_rateLimit.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -20,6 +21,19 @@ export default async function handler(req, res) {
   const databaseUrl = process.env.DATABASE_URL
   if (!databaseUrl) {
     return res.status(500).json({ error: 'Database not configured' })
+  }
+
+  // ─── Rate limiting by IP ────────────────────────────────────────────────
+  const ip = (req.headers?.['x-forwarded-for'] ?? '127.0.0.1').split(',')[0].trim()
+  const rl = await checkAndIncrementRegisterAttempt({ ip, databaseUrl })
+  if (!rl.allowed) {
+    return res.status(429).json({
+      error: {
+        type: 'register_rate_limit_exceeded',
+        message: 'Demasiados registros desde esta IP. Inténtalo de nuevo mañana.',
+        reset_at: rl.resetAt,
+      },
+    })
   }
 
   const sql = neon(databaseUrl)

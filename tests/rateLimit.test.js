@@ -15,7 +15,7 @@ vi.mock('@neondatabase/serverless', () => {
 })
 
 // Import after mock is registered
-import { checkRateLimit, checkFileRateLimit, checkLoginAttempts, incrementLoginAttempt, checkAndIncrementOtpAttempt } from '../api/_rateLimit.js'
+import { checkRateLimit, checkFileRateLimit, checkLoginAttempts, incrementLoginAttempt, checkAndIncrementOtpAttempt, checkAndIncrementRegisterAttempt } from '../api/_rateLimit.js'
 import { _mockSql } from '@neondatabase/serverless'
 
 beforeEach(() => {
@@ -154,6 +154,41 @@ describe('checkAndIncrementOtpAttempt', () => {
   it('DB error → fail open {allowed:true, remaining:null}', async () => {
     _mockSql.mockRejectedValue(new Error('timeout'))
     const result = await checkAndIncrementOtpAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake' })
+    expect(result).toEqual({ allowed: true, remaining: null })
+  })
+})
+
+// ─── checkAndIncrementRegisterAttempt ────────────────────────────────────────
+
+describe('checkAndIncrementRegisterAttempt', () => {
+  it('returns {allowed:true, remaining:null} when no databaseUrl', async () => {
+    const result = await checkAndIncrementRegisterAttempt({ ip: '1.2.3.4', databaseUrl: undefined })
+    expect(result).toEqual({ allowed: true, remaining: null })
+  })
+
+  it('register_count=2 with limit=5 → {allowed:true, remaining:3}', async () => {
+    _mockSql.mockResolvedValue([{ register_count: 2 }])
+    const result = await checkAndIncrementRegisterAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 5 })
+    expect(result).toEqual({ allowed: true, remaining: 3 })
+  })
+
+  it('register_count=5 with limit=5 → {allowed:true, remaining:0} (still allowed on exact limit)', async () => {
+    _mockSql.mockResolvedValue([{ register_count: 5 }])
+    const result = await checkAndIncrementRegisterAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 5 })
+    expect(result).toEqual({ allowed: true, remaining: 0 })
+  })
+
+  it('register_count=6 with limit=5 → {allowed:false, limit:5}', async () => {
+    _mockSql.mockResolvedValue([{ register_count: 6 }])
+    const result = await checkAndIncrementRegisterAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake', limit: 5 })
+    expect(result.allowed).toBe(false)
+    expect(result.limit).toBe(5)
+    expect(typeof result.resetAt).toBe('string')
+  })
+
+  it('DB error → fail open {allowed:true, remaining:null}', async () => {
+    _mockSql.mockRejectedValue(new Error('timeout'))
+    const result = await checkAndIncrementRegisterAttempt({ ip: '1.2.3.4', databaseUrl: 'postgres://fake' })
     expect(result).toEqual({ allowed: true, remaining: null })
   })
 })

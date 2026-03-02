@@ -163,6 +163,38 @@ export async function checkAndIncrementOtpAttempt({ ip, databaseUrl, limit = 10 
 }
 
 /**
+ * Increments the registration counter for the given IP and checks the limit.
+ * Call on EVERY registration attempt (before inserting the user).
+ * Returns { allowed, remaining, limit, resetAt }
+ */
+export async function checkAndIncrementRegisterAttempt({ ip, databaseUrl, limit = 5 }) {
+  if (!databaseUrl) {
+    console.warn('[register-rate-limit] DATABASE_URL not set — skipping')
+    return { allowed: true, remaining: null }
+  }
+  try {
+    const sql = neon(databaseUrl)
+    const rows = await sql`
+      INSERT INTO rate_limits (ip_address, window_date, request_count, register_count, updated_at)
+      VALUES (${ip}, CURRENT_DATE, 0, 1, NOW())
+      ON CONFLICT (ip_address, window_date)
+      DO UPDATE SET
+        register_count = rate_limits.register_count + 1,
+        updated_at = NOW()
+      RETURNING register_count
+    `
+    const count = rows[0].register_count
+    if (count > limit) {
+      return { allowed: false, limit, resetAt: midnight() }
+    }
+    return { allowed: true, remaining: Math.max(0, limit - count) }
+  } catch (err) {
+    console.error('[register-rate-limit] Check failed:', err.message)
+    return { allowed: true, remaining: null }
+  }
+}
+
+/**
  * Increments the file upload count for the given IP.
  * Call this only after the upstream request succeeds.
  */
