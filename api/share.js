@@ -3,9 +3,11 @@ import { checkAndIncrementShareAttempt } from './_rateLimit.js'
 
 function generateShortId(length = 6) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = new Uint8Array(length)
+  crypto.getRandomValues(bytes)
   let result = ''
   for (let i = 0; i < length; i++) {
-    result += chars[Math.floor(Math.random() * chars.length)]
+    result += chars[bytes[i] % chars.length]
   }
   return result
 }

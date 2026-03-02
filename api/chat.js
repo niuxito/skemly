@@ -112,6 +112,6 @@ export default async function handler(req, res) {
     const data = await upstream.json()
     return res.status(upstream.status).json(data)
   } catch (err) {
-    return res.status(502).json({ error: { message: `Proxy error: ${err.message}` } })
+    return res.status(502).json({ error: { message: 'Error de conexión con el servicio de IA. Inténtalo de nuevo.' } })
   }
 }

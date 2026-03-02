@@ -218,10 +218,10 @@ function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, f
             proxyRes.pipe(res)
           }
         )
-        proxyReq.on('error', err => {
+        proxyReq.on('error', () => {
           res.statusCode = 502
           res.setHeader('Content-Type', 'application/json')
-          res.end(JSON.stringify({ error: { message: `Proxy error: ${err.message}` } }))
+          res.end(JSON.stringify({ error: { message: 'Error de conexión con el servicio de IA. Inténtalo de nuevo.' } }))
         })
         proxyReq.write(anthropicBody)
         proxyReq.end()

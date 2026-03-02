@@ -38,10 +38,10 @@ export default async function handler(req, res) {
 
   const sql = neon(databaseUrl)
 
-  // Check if email already exists
+  // Check if email already exists — use a generic message to avoid email enumeration
   const existing = await sql`SELECT id FROM users WHERE email = ${email.toLowerCase()}`
   if (existing.length > 0) {
-    return res.status(409).json({ error: 'Email ya registrado' })
+    return res.status(409).json({ error: 'No se pudo completar el registro. Revisa los datos o inicia sesión si ya tienes una cuenta.' })
   }
 
   // Hash password and insert
