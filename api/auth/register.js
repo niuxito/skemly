@@ -64,7 +64,9 @@ export default async function handler(req, res) {
     console.error('[register] Failed to send verification email:', err.message)
   })
 
-  const token = signToken({ sub: user.id, email: user.email, ver: 1 })
+  // Create a new auth session
+  const [session] = await sql`INSERT INTO auth_sessions (user_id) VALUES (${user.id}) RETURNING id`
+  const token = signToken({ sub: user.id, email: user.email, sid: session.id })
   setAuthCookie(res, token)
 
   return res.status(201).json({

@@ -8,13 +8,13 @@ export default async function handler(req, res) {
 
   const payload = getUserFromRequest(req)
 
-  // Clear the auth cookie regardless of whether the token is valid
+  // Clear the auth cookie regardless of token validity
   clearAuthCookie(res)
 
-  // Increment token_version to invalidate all existing tokens for this user
-  if (payload?.sub && process.env.DATABASE_URL) {
+  // Revoke only this specific session (other devices remain logged in)
+  if (payload?.sid && process.env.DATABASE_URL) {
     const sql = neon(process.env.DATABASE_URL)
-    await sql`UPDATE users SET token_version = token_version + 1 WHERE id = ${payload.sub}`.catch(() => {})
+    await sql`UPDATE auth_sessions SET revoked_at = NOW() WHERE id = ${payload.sid}`.catch(() => {})
   }
 
   return res.status(200).json({ ok: true })

@@ -33,7 +33,7 @@ export default async function handler(req, res) {
 
   const sql = neon(databaseUrl)
 
-  const rows = await sql`SELECT id, email, name, password_hash, email_verified, token_version FROM users WHERE email = ${email.toLowerCase()}`
+  const rows = await sql`SELECT id, email, name, password_hash, email_verified FROM users WHERE email = ${email.toLowerCase()}`
 
   // Same error for wrong email or wrong password (no enumeration)
   const GENERIC_ERROR = 'Email o contraseña incorrectos'
@@ -51,7 +51,9 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: GENERIC_ERROR })
   }
 
-  const token = signToken({ sub: user.id, email: user.email, ver: user.token_version })
+  // Create a new auth session (allows multiple concurrent sessions per user)
+  const [session] = await sql`INSERT INTO auth_sessions (user_id) VALUES (${user.id}) RETURNING id`
+  const token = signToken({ sub: user.id, email: user.email, sid: session.id })
   setAuthCookie(res, token)
 
   return res.status(200).json({ user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified } })
