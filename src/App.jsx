@@ -165,21 +165,6 @@ function relativeTime(ts, t) {
   return t('days_ago', Math.floor(diff / 86_400_000))
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-const DEFAULT_DSL = `vibe: clean
-layout: TD
-
-<internet|Internet> -> [lb|Load Balancer]#info
-
-group "Private Cloud" #safe {
-  [lb|Load Balancer] -> [app1|App Server 1], [app2|App Server 2]
-  [app1|App Server 1], [app2|App Server 2] -> (db|Main Database)#safe
-}
-
-[app1|App Server 1] -> "Auth Check" -> ?valid|Valid??
-?valid|Valid?? -> "no" -> [login|Login Page]#danger
-`
-
 // ─── VibeBar — overlaid on diagram canvas ────────────────────────────────────
 const VIBES = [
   { key: 'clean',     icon: '☀️', label: 'Clean'     },
@@ -238,7 +223,7 @@ export default function App() {
   // ─── Sessions state ──────────────────────────────────────────────────────
   const [sessions, setSessions] = useState(() => {
     const saved = loadSessions(sessionsKey(null))
-    return saved.length ? saved : [createSession(DEFAULT_DSL)]
+    return saved.length ? saved : [createSession('')]
   })
   const [activeSessionId, setActiveSessionId] = useState(() => {
     const saved = loadSessions(sessionsKey(null))
@@ -459,7 +444,7 @@ export default function App() {
         setActiveSessionId(anonSessions[0].id)
         clearAnonStore()
       } else {
-        const s = createSession(user ? '' : DEFAULT_DSL)
+        const s = createSession('')
         setSessions([s])
         setActiveSessionId(s.id)
       }
