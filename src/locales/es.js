@@ -51,6 +51,7 @@ export default {
   days_ago: (n) => `hace ${n}d`,
 
   // Chat panel
+  canvas_empty_hint: 'Describe tu diagrama en el chat →',
   chat_empty_title: 'Describe el diagrama que quieres crear.',
   chat_empty_hint: 'p.ej. "Crea un diagrama de arquitectura con un load balancer y dos servidores"',
   chat_thinking: 'Pensando…',

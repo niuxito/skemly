@@ -324,7 +324,7 @@ function RoughOverlay({ ast, nodeMap, theme, totalW, totalH, canvasRef: external
 
 
 // ─── Main DiagramRenderer ─────────────────────────────────────────────────────
-export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onNodeLabelChange }) {
+export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onNodeLabelChange, emptyHint }) {
   const themeName = ast?.directives?.vibe ?? 'clean'
   const theme = THEMES[themeName] ?? THEMES.clean
   const containerRef = useRef(null)
@@ -619,7 +619,7 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
     return (
       <div className="flex items-center justify-center h-full text-sm"
         style={{ background: theme.canvasBg, color: theme.nodeText, fontFamily: theme.font }}>
-        {ast?.nodes?.length === 0 ? 'Start typing DSL on the left…' : 'Computing layout…'}
+        {ast?.nodes?.length === 0 ? (emptyHint ?? 'Computing layout…') : 'Computing layout…'}
       </div>
     )
   }

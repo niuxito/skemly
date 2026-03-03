@@ -1038,6 +1038,7 @@ export default function App() {
               svgRef={svgRef}
               canvasRef={canvasRef}
               onNodeLabelChange={handleNodeLabelChange}
+              emptyHint={t('canvas_empty_hint')}
             />
             <VibeBar current={themeName} onChange={handleVibeChange} />
           </div>
@@ -1288,6 +1289,7 @@ export default function App() {
               svgRef={svgRef}
               canvasRef={canvasRef}
               onNodeLabelChange={handleNodeLabelChange}
+              emptyHint={t('canvas_empty_hint')}
             />
             <VibeBar current={themeName} onChange={handleVibeChange} />
           </div>
