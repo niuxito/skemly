@@ -3,8 +3,9 @@
  * ANTHROPIC_API_KEY is read from Vercel environment variables (never exposed to the client).
  * Rate limiting via Neon PostgreSQL (DATABASE_URL + DAILY_LIMIT env vars).
  */
-import { checkRateLimit, checkFileRateLimit, incrementFileCount } from './_rateLimit.js'
+import { checkRateLimit, checkFileRateLimit, incrementFileCount, checkAndIncrementInjectionAttempt } from './_rateLimit.js'
 import { buildAnthropicBody } from './_buildAnthropicBody.js'
+import { detectInjection } from './_promptGuard.js'
 
 const FILE_MAX_SIZE = parseInt(process.env.FILE_MAX_SIZE_ANON ?? String(2 * 1024 * 1024), 10)
 const FILE_DAILY_LIMIT = parseInt(process.env.FILE_DAILY_LIMIT_ANON ?? '5', 10)
@@ -81,6 +82,22 @@ export default async function handler(req, res) {
     if (frl.remaining !== null) {
       res.setHeader('X-FileRateLimit-Remaining', String(frl.remaining))
     }
+  }
+
+  // ─── Prompt injection guard ───────────────────────────────────────────────
+  const userMessages = req.body?.messages ?? []
+  const lastUserMsg = userMessages.filter(m => m.role === 'user').pop()
+  const injection = detectInjection(lastUserMsg?.content ?? '')
+
+  if (injection.detected) {
+    // Count the attempt (does not consume the regular daily request_count)
+    await checkAndIncrementInjectionAttempt({ ip, databaseUrl: process.env.DATABASE_URL })
+    return res.status(400).json({
+      error: {
+        type: 'prompt_injection_detected',
+        message: 'El mensaje contiene instrucciones que intentan modificar el comportamiento del asistente. Por favor, reformula tu petición.',
+      },
+    })
   }
 
   // ─── Model selection (first-shot vs edit) ────────────────────────────────

@@ -2,8 +2,9 @@ import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { request as httpsRequest } from 'https'
-import { checkRateLimit, checkFileRateLimit, incrementFileCount } from './api/_rateLimit.js'
+import { checkRateLimit, checkFileRateLimit, incrementFileCount, checkAndIncrementInjectionAttempt } from './api/_rateLimit.js'
 import { buildAnthropicBody } from './api/_buildAnthropicBody.js'
+import { detectInjection } from './api/_promptGuard.js'
 import registerHandler from './api/auth/register.js'
 import loginHandler from './api/auth/login.js'
 import meHandler from './api/auth/me.js'
@@ -189,6 +190,23 @@ function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, f
           if (frl.remaining !== null) {
             res.setHeader('X-FileRateLimit-Remaining', String(frl.remaining))
           }
+        }
+
+        // ─── Prompt injection guard ──────────────────────────────────────────
+        const userMessages = parsedBody?.messages ?? []
+        const lastUserMsg = userMessages.filter(m => m.role === 'user').pop()
+        const injection = detectInjection(lastUserMsg?.content ?? '')
+        if (injection.detected) {
+          await checkAndIncrementInjectionAttempt({ ip, databaseUrl })
+          res.statusCode = 400
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({
+            error: {
+              type: 'prompt_injection_detected',
+              message: 'El mensaje contiene instrucciones que intentan modificar el comportamiento del asistente. Por favor, reformula tu petición.',
+            },
+          }))
+          return
         }
 
         // ─── Model selection (first-shot vs edit) ───────────────────────────

@@ -227,6 +227,38 @@ export async function checkAndIncrementRegisterAttempt({ ip, databaseUrl, limit 
 }
 
 /**
+ * Increments the prompt injection counter for the given IP and checks the limit.
+ * Call on EVERY detected injection attempt (before forwarding to Anthropic).
+ * Returns { allowed: boolean, limit: number, resetAt?: string }
+ */
+export async function checkAndIncrementInjectionAttempt({ ip, databaseUrl, limit = 10 }) {
+  if (!databaseUrl) {
+    console.warn('[injection-guard] DATABASE_URL not set — skipping')
+    return { allowed: true }
+  }
+  try {
+    const sql = neon(databaseUrl)
+    const rows = await sql`
+      INSERT INTO rate_limits (ip_address, window_date, request_count, injection_count, updated_at)
+      VALUES (${ip}, CURRENT_DATE, 0, 1, NOW())
+      ON CONFLICT (ip_address, window_date)
+      DO UPDATE SET
+        injection_count = rate_limits.injection_count + 1,
+        updated_at = NOW()
+      RETURNING injection_count
+    `
+    const count = rows[0].injection_count
+    if (count > limit) {
+      return { allowed: false, limit, resetAt: midnight() }
+    }
+    return { allowed: true }
+  } catch (err) {
+    console.error('[injection-guard] Increment failed:', err.message)
+    return { allowed: true }
+  }
+}
+
+/**
  * Increments the file upload count for the given IP.
  * Call this only after the upstream request succeeds.
  */
