@@ -7,6 +7,7 @@ import { buildAnthropicBody } from './api/_buildAnthropicBody.js'
 import registerHandler from './api/auth/register.js'
 import loginHandler from './api/auth/login.js'
 import meHandler from './api/auth/me.js'
+import logoutHandler from './api/auth/logout.js'
 import verifyOtpHandler from './api/auth/verify-otp.js'
 import resendVerificationHandler from './api/auth/resend-verification.js'
 import shareHandler from './api/share.js'
@@ -26,11 +27,14 @@ async function runAuthHandler(handler, req, res) {
 
   // Vercel-style response shim
   let statusCode = 200
+  const extraHeaders = {}
   const vercelRes = {
     status(code) { statusCode = code; return vercelRes },
+    setHeader(name, value) { extraHeaders[name] = value; return vercelRes },
     json(data) {
       res.statusCode = statusCode
       res.setHeader('Content-Type', 'application/json')
+      for (const [k, v] of Object.entries(extraHeaders)) res.setHeader(k, v)
       res.end(JSON.stringify(data))
     },
   }
@@ -87,6 +91,7 @@ function authPlugin() {
     configureServer(server) {
       server.middlewares.use('/api/auth/register',             (req, res) => runAuthHandler(registerHandler,            req, res))
       server.middlewares.use('/api/auth/login',                (req, res) => runAuthHandler(loginHandler,               req, res))
+      server.middlewares.use('/api/auth/logout',               (req, res) => runAuthHandler(logoutHandler,              req, res))
       server.middlewares.use('/api/auth/me',                   (req, res) => runAuthHandler(meHandler,                  req, res))
       server.middlewares.use('/api/auth/verify-otp',           (req, res) => runAuthHandler(verifyOtpHandler,           req, res))
       server.middlewares.use('/api/auth/resend-verification',  (req, res) => runAuthHandler(resendVerificationHandler,  req, res))

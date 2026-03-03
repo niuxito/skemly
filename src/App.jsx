@@ -44,11 +44,11 @@ function createSession(dsl = '', title = 'Nueva sesión') {
 }
 
 // ─── DB helpers (pro/starter users) ──────────────────────────────────────────
+// Auth is handled via HttpOnly cookie — no manual token needed.
 async function postSessionToDB(session) {
-  const token = localStorage.getItem('vibediag_token')
   await fetch('/api/sessions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       id: session.id,
       title: session.title,
@@ -61,10 +61,9 @@ async function postSessionToDB(session) {
 }
 
 async function putSessionToDB(session) {
-  const token = localStorage.getItem('vibediag_token')
   await fetch(`/api/sessions?id=${encodeURIComponent(session.id)}`, {
     method: 'PUT',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       title: session.title,
       dsl: session.dsl,
@@ -76,11 +75,7 @@ async function putSessionToDB(session) {
 }
 
 async function deleteSessionFromDB(id) {
-  const token = localStorage.getItem('vibediag_token')
-  await fetch(`/api/sessions?id=${encodeURIComponent(id)}`, {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  })
+  await fetch(`/api/sessions?id=${encodeURIComponent(id)}`, { method: 'DELETE' })
 }
 
 function deriveTitle(dsl, messages, untitled = 'Sin título') {
@@ -268,12 +263,8 @@ export default function App() {
   const [authDefaultEmail, setAuthDefaultEmail] = useState('')
 
   useEffect(() => {
-    const token = localStorage.getItem('vibediag_token')
-    if (!token) {
-      setAuthResolved(true)
-      return
-    }
-    fetch('/api/auth/me', { headers: { Authorization: `Bearer ${token}` } })
+    // Cookie is sent automatically — no token needed in headers
+    fetch('/api/auth/me')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
         if (data?.user) setUser(data.user)
@@ -282,8 +273,8 @@ export default function App() {
       .catch(() => { setAuthResolved(true) })
   }, [])
 
-  function handleAuthSuccess({ token, user: u }) {
-    localStorage.setItem('vibediag_token', token)
+  function handleAuthSuccess({ user: u }) {
+    // Cookie is set by the server — no client-side token storage needed
     setUser(u)
   }
 
@@ -291,8 +282,9 @@ export default function App() {
     setUser(updatedUser)
   }
 
-  function handleLogout() {
-    localStorage.removeItem('vibediag_token')
+  async function handleLogout() {
+    // Increment token_version server-side and clear the HttpOnly cookie
+    try { await fetch('/api/auth/logout', { method: 'POST' }) } catch { /* ignore */ }
     setUser(null)
     // sessions loading effect will re-run with user=null → loads anonymous sessions
   }
@@ -473,8 +465,7 @@ export default function App() {
       }
     } else {
       setCloudLoading(true)
-      const token = localStorage.getItem('vibediag_token')
-      fetch('/api/sessions', { headers: { Authorization: `Bearer ${token}` } })
+      fetch('/api/sessions')
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           setCloudLoading(false)

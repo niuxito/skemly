@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless'
-import { comparePassword, signToken } from '../_auth.js'
+import { comparePassword, signToken, setAuthCookie } from '../_auth.js'
 import { checkLoginAttempts, incrementLoginAttempt } from '../_rateLimit.js'
 
 export default async function handler(req, res) {
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
 
   const sql = neon(databaseUrl)
 
-  const rows = await sql`SELECT id, email, name, password_hash, email_verified FROM users WHERE email = ${email.toLowerCase()}`
+  const rows = await sql`SELECT id, email, name, password_hash, email_verified, token_version FROM users WHERE email = ${email.toLowerCase()}`
 
   // Same error for wrong email or wrong password (no enumeration)
   const GENERIC_ERROR = 'Email o contraseña incorrectos'
@@ -51,7 +51,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: GENERIC_ERROR })
   }
 
-  const token = signToken({ sub: user.id, email: user.email })
+  const token = signToken({ sub: user.id, email: user.email, ver: user.token_version })
+  setAuthCookie(res, token)
 
-  return res.status(200).json({ token, user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified } })
+  return res.status(200).json({ user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified } })
 }

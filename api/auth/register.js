@@ -1,5 +1,5 @@
 import { neon } from '@neondatabase/serverless'
-import { hashPassword, signToken, generateOtp } from '../_auth.js'
+import { hashPassword, signToken, generateOtp, setAuthCookie } from '../_auth.js'
 import { sendVerificationEmail } from '../_email.js'
 import { checkAndIncrementRegisterAttempt } from '../_rateLimit.js'
 
@@ -64,10 +64,10 @@ export default async function handler(req, res) {
     console.error('[register] Failed to send verification email:', err.message)
   })
 
-  const token = signToken({ sub: user.id, email: user.email })
+  const token = signToken({ sub: user.id, email: user.email, ver: 1 })
+  setAuthCookie(res, token)
 
   return res.status(201).json({
-    token,
     user: { id: user.id, email: user.email, name: user.name, email_verified: false },
   })
 }

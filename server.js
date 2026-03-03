@@ -6,12 +6,14 @@
 import { createServer } from 'http'
 import { request as httpsRequest } from 'https'
 import { readFile } from 'fs/promises'
-import { join, extname } from 'path'
+import { join, extname, resolve } from 'path'
+import { sep } from 'path'
 import { fileURLToPath } from 'url'
 import { checkRateLimit } from './api/_rateLimit.js'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
-const DIST = join(__dirname, 'dist')
+const DIST = resolve(join(__dirname, 'dist'))
+const BODY_LIMIT = 1 * 1024 * 1024 // 1 MB
 const PORT = process.env.PORT ?? 3000
 const API_KEY = process.env.ANTHROPIC_API_KEY ?? ''
 
@@ -26,9 +28,18 @@ const MIME = {
 }
 
 function readBody(req) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
     let body = ''
-    req.on('data', chunk => { body += chunk })
+    let bytes = 0
+    req.on('data', chunk => {
+      bytes += Buffer.byteLength(chunk)
+      if (bytes > BODY_LIMIT) {
+        reject(new Error('Payload too large'))
+        req.destroy()
+        return
+      }
+      body += chunk
+    })
     req.on('end', () => resolve(body))
   })
 }
@@ -67,7 +78,14 @@ async function handleChat(req, res) {
   }
 
   // ─── Proxy to Anthropic ─────────────────────────────────────────────────
-  const body = await readBody(req)
+  let body
+  try {
+    body = await readBody(req)
+  } catch {
+    res.writeHead(413, { 'Content-Type': 'application/json' })
+    res.end(JSON.stringify({ error: { message: 'Payload too large' } }))
+    return
+  }
 
   const proxyReq = httpsRequest(
     {
@@ -85,9 +103,9 @@ async function handleChat(req, res) {
       proxyRes.pipe(res)
     }
   )
-  proxyReq.on('error', err => {
+  proxyReq.on('error', () => {
     res.writeHead(502, { 'Content-Type': 'application/json' })
-    res.end(JSON.stringify({ error: { message: `Proxy error: ${err.message}` } }))
+    res.end(JSON.stringify({ error: { message: 'Error de conexión con el servicio de IA. Inténtalo de nuevo.' } }))
   })
   proxyReq.write(body)
   proxyReq.end()
@@ -95,7 +113,13 @@ async function handleChat(req, res) {
 
 async function handleStatic(req, res) {
   const urlPath = req.url.split('?')[0]
-  const filePath = join(DIST, urlPath === '/' ? 'index.html' : urlPath)
+  const filePath = resolve(join(DIST, urlPath === '/' ? 'index.html' : urlPath))
+  // Reject path traversal attempts
+  if (!filePath.startsWith(DIST + sep) && filePath !== DIST) {
+    res.writeHead(400)
+    res.end()
+    return
+  }
   try {
     const data = await readFile(filePath)
     const mime = MIME[extname(filePath)] ?? 'application/octet-stream'
