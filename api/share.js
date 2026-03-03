@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import { checkAndIncrementShareAttempt } from './_rateLimit.js'
+import { checkCsrf } from './_csrf.js'
 
 function generateShortId(length = 6) {
   const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
@@ -48,6 +49,7 @@ export default async function handler(req, res) {
 
   // ── POST /api/share ───────────────────────────────────────────────────────
   if (req.method === 'POST') {
+    if (checkCsrf(req, res)) return
     const { dsl, title } = req.body ?? {}
     if (!dsl) {
       return res.status(400).json({ error: 'Missing dsl' })

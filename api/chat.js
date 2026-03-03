@@ -6,6 +6,7 @@
 import { checkRateLimit, checkFileRateLimit, incrementFileCount, checkAndIncrementInjectionAttempt } from './_rateLimit.js'
 import { buildAnthropicBody } from './_buildAnthropicBody.js'
 import { detectInjection } from './_promptGuard.js'
+import { checkCsrf } from './_csrf.js'
 
 const FILE_MAX_SIZE = parseInt(process.env.FILE_MAX_SIZE_ANON ?? String(2 * 1024 * 1024), 10)
 const FILE_DAILY_LIMIT = parseInt(process.env.FILE_DAILY_LIMIT_ANON ?? '5', 10)
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
+  if (checkCsrf(req, res)) return
 
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) {

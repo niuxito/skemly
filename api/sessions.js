@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import { getUserFromRequest } from './_auth.js'
+import { checkCsrf } from './_csrf.js'
 
 /**
  * Strip base64 attachment data from messages before storing in DB.
@@ -26,7 +27,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized' })
   }
 
-  if (user.plan !== 'pro' && user.plan !== 'starter') {
+  const PAID_PLANS = ['pro', 'starter']
+  if (!PAID_PLANS.includes(user.plan)) {
     return res.status(403).json({ error: 'Plan upgrade required' })
   }
 
@@ -45,6 +47,9 @@ export default async function handler(req, res) {
     `
     return res.status(200).json({ sessions: rows })
   }
+
+  // ── CSRF check for all mutating methods ──────────────────────────────────
+  if (checkCsrf(req, res)) return
 
   // ── POST /api/sessions ───────────────────────────────────────────────────
   if (req.method === 'POST') {
