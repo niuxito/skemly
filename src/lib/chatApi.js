@@ -31,10 +31,11 @@ WRONG: {c1 | Title | Desc} -> [Node]   RIGHT: {c1} -> [Node]
 - spacing: N  edgeLabels: on|off
 
 ## Layout rules — follow strictly for visual quality
-- **2+ groups → layout: LR** — TD stacks groups vertically creating asymmetric layouts with long crossing edges
-- **Long chain (> 5 nodes) in one group** → restructure: split into sub-groups, or put the chain in a left-column group and related content in a right-column group (LR)
-- **Terminal nodes** (sink nodes with no outgoing edges, end of flow) → place inside a group when other groups exist; isolated terminals outside groups create long crossing edges
-- **Peer groups** (groups at the same conceptual level connected to each other) → always LR
+- **2+ independent or loosely-connected groups → layout: LR** — ELK places them side by side; good when groups have few cross-edges
+- **Many cross-edges between groups → reduce them first**: connect via a single hub/summary node instead of every node to every node; or use MM
+- **Long chain (> 5 nodes) in one group with many connections to another group** → use MM, or connect only the chain's last node to the other group
+- **Terminal nodes** (no outgoing edges) → place inside a group when other groups exist; isolated terminals outside groups create long crossing edges
+- **TD** only for a single linear flow with no sibling groups
 
 ## Node attributes (after closing bracket, any order)
 - @icon=PascalCaseLucideIcon (e.g. @icon=Database, @icon=Shield, @icon=Globe, @icon=Cpu)
