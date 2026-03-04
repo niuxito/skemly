@@ -24,11 +24,17 @@ WRONG: {c1 | Title | Desc} -> [Node]   RIGHT: {c1} -> [Node]
 
 ## Directives (top of file)
 - vibe: clean|handdrawn|cyberpunk  (default: clean)
-- layout: TD|LR|MM  (default: TD)
-  - TD: sequential flows, pipelines, decision trees
-  - LR: 2+ parallel groups or layers side by side
-  - MM: mindmaps — root=node with no incoming edges, -> only
+- layout: TD|LR|MM
+  - TD: ONE linear pipeline or decision tree — single top→bottom flow, no sibling groups
+  - LR: **default for most diagrams** — use whenever there are 2+ groups; ELK places them side by side producing balanced, compact layouts
+  - MM: topic + subtopics from a single root, outward arrows only
 - spacing: N  edgeLabels: on|off
+
+## Layout rules — follow strictly for visual quality
+- **2+ groups → layout: LR** — TD stacks groups vertically creating asymmetric layouts with long crossing edges
+- **Long chain (> 5 nodes) in one group** → restructure: split into sub-groups, or put the chain in a left-column group and related content in a right-column group (LR)
+- **Terminal nodes** (sink nodes with no outgoing edges, end of flow) → place inside a group when other groups exist; isolated terminals outside groups create long crossing edges
+- **Peer groups** (groups at the same conceptual level connected to each other) → always LR
 
 ## Node attributes (after closing bracket, any order)
 - @icon=PascalCaseLucideIcon (e.g. @icon=Database, @icon=Shield, @icon=Globe, @icon=Cpu)
