@@ -188,7 +188,7 @@ async function runLayout(ast) {
       id: g.id,
       labels: [{ text: g.label }],
       layoutOptions: {
-        'elk.direction': 'DOWN',
+        'elk.direction': g.layoutDir === 'LR' ? 'RIGHT' : 'DOWN',
         'elk.padding': '[top=40,left=20,right=20,bottom=20]',
         'elk.spacing.nodeNode': String(spacing),
         'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing * 1.5),
@@ -228,6 +228,51 @@ async function runLayout(ast) {
 
   const result = await elk.layout(graph)
   annotateLines(result.children)
+
+  // Post-process: rearrange nodes within @layout=LR groups left-to-right.
+  // ELK ignores elk.direction on compound nodes when INCLUDE_CHILDREN is used,
+  // so we apply the same manual repositioning pattern as the top-level LR logic.
+  const lrGroups = groups.filter(g => g.layoutDir === 'LR')
+  if (lrGroups.length > 0) {
+    function findCompound(children, id) {
+      for (const c of children ?? []) {
+        if (c.id === id) return c
+        if (c.children?.length) { const f = findCompound(c.children, id); if (f) return f }
+      }
+      return null
+    }
+    function collectLeafIds(node, ids = new Set()) {
+      for (const c of node.children ?? []) {
+        if (c.children?.length) collectLeafIds(c, ids); else ids.add(c.id)
+      }
+      return ids
+    }
+    const repositionedIds = new Set()
+    for (const g of lrGroups) {
+      const compound = findCompound(result.children, g.id)
+      if (!compound?.children?.length) continue
+      const children = [...compound.children].sort((a, b) => (a.y ?? 0) - (b.y ?? 0))
+      const topPad = 40, sidePad = 20, botPad = 20
+      const maxH = Math.max(...children.map(c => c.height ?? 0))
+      let curX = sidePad
+      for (const child of children) {
+        child.x = curX
+        child.y = topPad + Math.round((maxH - (child.height ?? 0)) / 2)
+        curX += (child.width ?? 0) + spacing
+      }
+      compound.width  = curX - spacing + sidePad
+      compound.height = maxH + topPad + botPad
+      collectLeafIds(compound, repositionedIds)
+      // Clear edges stored INSIDE the compound node (ELK puts intra-group edges here)
+      for (const e of compound.edges ?? []) { e.sections = [] }
+    }
+    // Also clear root-level edges touching repositioned nodes
+    for (const edge of result.edges ?? []) {
+      if (repositionedIds.has(edge.sources?.[0]) || repositionedIds.has(edge.targets?.[0])) {
+        edge.sections = []
+      }
+    }
+  }
 
   if (direction === 'RIGHT' && topLevelGroups.length > 1) {
     // Post-process: arrange top-level groups left-to-right.

@@ -167,14 +167,15 @@ export function parseDSL(rawInput) {
       return
     }
 
-    // Group open: group "Title" #tag {
-    const groupOpenMatch = trimmed.match(/^group\s+"([^"]+)"(?:\s+#(\w+))?\s*\{$/)
+    // Group open: group "Title" #tag @layout=TD|LR {
+    const groupOpenMatch = trimmed.match(/^group\s+"([^"]+)"(?:\s+#(\w+))?(?:\s+@layout=(TD|LR))?\s*\{$/)
     if (groupOpenMatch) {
       const gId = `group_${groups.length}`
       const g = {
         id: gId,
         label: groupOpenMatch[1],
         tag: groupOpenMatch[2] || null,
+        layoutDir: groupOpenMatch[3] || null,
         parentId: groupStack.length > 0 ? groupStack[groupStack.length - 1].id : null,
         nodeIds: [],
       }

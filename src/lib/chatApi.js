@@ -20,7 +20,9 @@ WRONG: {c1 | Title | Desc} -> [Node]   RIGHT: {c1} -> [Node]
 
 ## Tags & groups
 - Tags: #danger #safe #info #warning — e.g. [Node]#info
-- Groups: group "Title" #tag { ... }  (nestable)
+- Groups: group "Title" #tag @layout=TD|LR { ... }  (nestable)
+  - @layout=TD: nodes inside flow top→down (default)
+  - @layout=LR: nodes inside flow left→right — use for horizontal rows of items within a group
 
 ## Directives (top of file)
 - vibe: clean|handdrawn|cyberpunk  (default: clean)
