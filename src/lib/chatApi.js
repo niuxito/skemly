@@ -16,6 +16,7 @@ WRONG: {c1 | Title | Desc} -> [Node]   RIGHT: {c1} -> [Node]
 - [id|Label] — if no |, id=label (normalized: lowercase, trim, collapse spaces)
 - -> directed  <-> bidirectional  A->"Label"->B
 - [A],[B]->[C],[D] = cartesian expansion (4 edges)
+- Edge color: A->"#hex"->B (quoted hex = colors the arrow, no label shown) e.g. [A]->"#e74c3c"->[B]
 
 ## Tags & groups
 - Tags: #danger #safe #info #warning — e.g. [Node]#info

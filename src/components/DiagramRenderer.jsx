@@ -193,11 +193,18 @@ function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
 
   const showLabels = directives?.edgeLabels !== 'off'
   const isBidi = edge.dir === '<->'
-  const glowFilter = theme.glow ? `drop-shadow(0 0 3px ${theme.edgeStroke})` : undefined
 
-  // Mindmap: thicker strokes, no arrowheads
-  const stroke = theme.edgeStroke
+  // Edge color resolution:
+  // 1. edge.color  → explicit color from "Label"#hex syntax (parser-provided)
+  // 2. hex-only label → the entire label IS a hex color, no text shown
+  // 3. fallback to theme color
+  const HEX_COLOR_RE = /^#[0-9a-fA-F]{3,8}$/
+  const edgeColorLabel = edge.label && HEX_COLOR_RE.test(edge.label.trim()) ? edge.label.trim() : null
+  const edgeColor = edge.color ?? edgeColorLabel ?? null
+
+  const stroke = edgeColor ?? theme.edgeStroke
   const strokeW = isMindmap ? theme.edgeStrokeWidth + 0.5 : theme.edgeStrokeWidth
+  const glowFilter = theme.glow ? `drop-shadow(0 0 3px ${stroke})` : undefined
 
   // Compute label position from the actual path midpoint.
   // ELK's label x/y are computed during DOWN layout and become stale after LR
@@ -213,34 +220,44 @@ function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
       labelMidX = mt**3*firstSec.startPoint.x + 3*mt**2*t*firstSec.cp1.x + 3*mt*t**2*firstSec.cp2.x + t**3*firstSec.endPoint.x
       labelMidY = mt**3*firstSec.startPoint.y + 3*mt**2*t*firstSec.cp1.y + 3*mt*t**2*firstSec.cp2.y + t**3*firstSec.endPoint.y
     } else {
-      // Collect all path points, take midpoint of middle segment
-      const allPts = []
-      for (const s of elkEdge.sections) {
-        allPts.push(s.startPoint, ...(s.bendPoints || []))
-      }
-      allPts.push(lastSec.endPoint)
-      const midIdx = Math.floor((allPts.length - 1) / 2)
-      const p1 = allPts[midIdx], p2 = allPts[midIdx + 1] ?? allPts[midIdx]
-      labelMidX = (p1.x + p2.x) / 2
-      labelMidY = (p1.y + p2.y) / 2
+      // Geometric midpoint between start and end — avoids landing at group entry points
+      labelMidX = (firstSec.startPoint.x + lastSec.endPoint.x) / 2
+      labelMidY = (firstSec.startPoint.y + lastSec.endPoint.y) / 2
     }
   }
+
+  const arrowEnd   = isMindmap ? undefined : edgeColor ? 'url(#arrowhead-c)' : 'url(#arrowhead)'
+  const arrowStart = !isMindmap && isBidi ? (edgeColor ? 'url(#arrowhead-c-start)' : 'url(#arrowhead-start)') : undefined
+  const textLabel  = edgeColorLabel ? null : edge.label  // hex-only labels are visual only, not shown as text
 
   return (
     <g>
       <path d={d} fill="none" stroke={stroke} strokeWidth={strokeW}
         strokeLinecap="round"
-        markerEnd={isMindmap ? undefined : 'url(#arrowhead)'}
-        markerStart={!isMindmap && isBidi ? 'url(#arrowhead-start)' : undefined}
-        filter={glowFilter} />
-      {showLabels && edge.label && labelMidX != null && (
-        <text x={labelMidX} y={labelMidY}
-          textAnchor="middle" dominantBaseline="middle"
-          fontFamily={theme.font} fontSize={theme.fontSize - 1} fill={theme.labelText}
-          style={{ userSelect: 'none' }}>
-          {edge.label}
-        </text>
-      )}
+        markerEnd={arrowEnd}
+        markerStart={arrowStart}
+        filter={glowFilter}
+        style={edgeColor ? { color: edgeColor } : undefined} />
+      {showLabels && textLabel && labelMidX != null && (() => {
+        const fs = theme.fontSize - 1
+        const bgW = textLabel.length * fs * 0.6 + 12
+        const bgH = fs + 8
+        return (
+          <>
+            <rect
+              x={labelMidX - bgW / 2} y={labelMidY - bgH / 2}
+              width={bgW} height={bgH} rx={3}
+              fill={theme.labelBg ?? '#ffffff'} fillOpacity={theme.labelBgOpacity ?? 0.88}
+            />
+            <text x={labelMidX} y={labelMidY}
+              textAnchor="middle" dominantBaseline="middle"
+              fontFamily={theme.font} fontSize={fs} fill={theme.labelText}
+              style={{ userSelect: 'none' }}>
+              {textLabel}
+            </text>
+          </>
+        )
+      })()}
     </g>
   )
 }
@@ -691,6 +708,13 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
           </marker>
           <marker id="arrowhead-start" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto-start-reverse">
             <polygon points="0 0, 10 3.5, 0 7" fill={theme.arrowFill} />
+          </marker>
+          {/* Colored arrowheads — inherit color from the path's CSS `color` property */}
+          <marker id="arrowhead-c" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+            <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />
+          </marker>
+          <marker id="arrowhead-c-start" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto-start-reverse">
+            <polygon points="0 0, 10 3.5, 0 7" fill="currentColor" />
           </marker>
         </defs>
 

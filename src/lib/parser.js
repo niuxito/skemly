@@ -231,9 +231,10 @@ export function parseDSL(rawInput) {
         i++
 
         // Collect optional label
-        let edgeLabel = null
+        let edgeLabel = null, edgeColor = null
         if (i < parts.length && parts[i].type === 'label') {
           edgeLabel = parts[i].text
+          edgeColor = parts[i].color ?? null
           i++
           // Expect another arrow after label
           if (i < parts.length && parts[i].type === 'arrow') {
@@ -257,6 +258,7 @@ export function parseDSL(rawInput) {
                   to: tgt.id_key,
                   dir,
                   label: edgeLabel,
+                  color: edgeColor,
                 })
               }
             }
@@ -457,11 +459,14 @@ export function parseDSL(rawInput) {
         continue
       }
 
-      // Try quoted label
+      // Try quoted label — optionally followed by a hex color: "Label"#4ecdc4
       if (line[i] === '"') {
         const text = readQuotedLabel()
         if (text !== null) {
-          parts.push({ type: 'label', text })
+          const colorM = line.slice(i).match(/^#([0-9a-fA-F]{3,8})/)
+          const color = colorM ? ('#' + colorM[1]) : null
+          if (colorM) i += colorM[0].length
+          parts.push({ type: 'label', text, color })
           continue
         }
       }
