@@ -4,7 +4,7 @@ import { THEMES } from '../lib/themes.js'
 import * as LucideIcons from 'lucide-react'
 import { Maximize2, Minimize2, ExternalLink } from 'lucide-react'
 
-const ICON_SIZE = 18
+const ICON_SIZE = 20
 const CARD_BODY_LINE_H = 15
 const CARD_BODY_PADDING = 8
 
@@ -171,6 +171,36 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
   )
 }
 
+// ─── Rounded orthogonal path builder ──────────────────────────────────────────
+// Builds an SVG path string from a sequence of points with rounded corners
+// at each bend. Uses quadratic bezier (Q) so corners look smooth without
+// requiring bezier control points from the layout engine.
+function buildRoundedPath(pts, r = 6) {
+  if (!pts?.length) return ''
+  if (pts.length === 1) return `M${pts[0].x},${pts[0].y}`
+  let d = `M${pts[0].x},${pts[0].y}`
+  for (let i = 1; i < pts.length; i++) {
+    const curr = pts[i]
+    const next = pts[i + 1]
+    if (next && r > 0) {
+      const prev = pts[i - 1]
+      const dx1 = curr.x - prev.x, dy1 = curr.y - prev.y
+      const dx2 = next.x - curr.x,  dy2 = next.y - curr.y
+      const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1)
+      const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2)
+      if (len1 > 0 && len2 > 0) {
+        const cr = Math.min(r, len1 / 2, len2 / 2)
+        const bx = curr.x - (dx1 / len1) * cr, by = curr.y - (dy1 / len1) * cr
+        const ax = curr.x + (dx2 / len2) * cr, ay = curr.y + (dy2 / len2) * cr
+        d += ` L${bx},${by} Q${curr.x},${curr.y} ${ax},${ay}`
+        continue
+      }
+    }
+    d += ` L${curr.x},${curr.y}`
+  }
+  return d
+}
+
 // ─── Edge ─────────────────────────────────────────────────────────────────────
 function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
   if (!elkEdge?.sections?.length) return null
@@ -182,13 +212,14 @@ function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
     // Smooth bezier curve for mindmap edges
     d = `M${sec.startPoint.x},${sec.startPoint.y} C${sec.cp1.x},${sec.cp1.y} ${sec.cp2.x},${sec.cp2.y} ${sec.endPoint.x},${sec.endPoint.y}`
   } else {
-    // Orthogonal path for regular diagrams (concatenate all sections)
-    d = ''
+    // Collect all points across sections, then build rounded path
+    const allPts = []
     for (const s of elkEdge.sections) {
-      const pts = [s.startPoint, ...(s.bendPoints || []), s.endPoint]
-      pts.forEach((p, i) => { d += `${i === 0 && d === '' ? 'M' : 'L'}${p.x},${p.y} ` })
+      if (allPts.length === 0) allPts.push(s.startPoint)
+      if (s.bendPoints?.length) allPts.push(...s.bendPoints)
+      allPts.push(s.endPoint)
     }
-    d = d.trim()
+    d = buildRoundedPath(allPts, 6)
   }
 
   const showLabels = directives?.edgeLabels !== 'off'
