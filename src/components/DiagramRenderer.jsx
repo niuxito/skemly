@@ -237,23 +237,45 @@ function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
   const strokeW = isMindmap ? theme.edgeStrokeWidth + 0.5 : theme.edgeStrokeWidth
   const glowFilter = theme.glow ? `drop-shadow(0 0 3px ${stroke})` : undefined
 
-  // Compute label position from the actual path midpoint.
-  // ELK's label x/y are computed during DOWN layout and become stale after LR
-  // post-processing (groups repositioned, sections translated but labels not).
-  // Using path midpoint is always correct regardless of layout direction.
+  // Compute label position from the actual path midpoint (polyline walk).
+  // Geometric midpoint between start and end is wrong for L-shaped paths — it
+  // lands in empty space. Walking half the total arc length gives the correct
+  // midpoint regardless of direction or number of bends.
   let labelMidX, labelMidY
   if (showLabels && edge.label && elkEdge.sections?.length) {
     const firstSec = elkEdge.sections[0]
-    const lastSec  = elkEdge.sections[elkEdge.sections.length - 1]
     if (firstSec.isBezier && firstSec.cp1 && firstSec.cp2) {
-      // Cubic bezier midpoint at t=0.5
+      // Cubic bezier: sample at t=0.5
       const t = 0.5, mt = 1 - t
       labelMidX = mt**3*firstSec.startPoint.x + 3*mt**2*t*firstSec.cp1.x + 3*mt*t**2*firstSec.cp2.x + t**3*firstSec.endPoint.x
       labelMidY = mt**3*firstSec.startPoint.y + 3*mt**2*t*firstSec.cp1.y + 3*mt*t**2*firstSec.cp2.y + t**3*firstSec.endPoint.y
     } else {
-      // Geometric midpoint between start and end — avoids landing at group entry points
-      labelMidX = (firstSec.startPoint.x + lastSec.endPoint.x) / 2
-      labelMidY = (firstSec.startPoint.y + lastSec.endPoint.y) / 2
+      // Build the full polyline from all sections, then walk to the midpoint
+      const pts = []
+      for (const s of elkEdge.sections) {
+        if (pts.length === 0) pts.push(s.startPoint)
+        if (s.bendPoints?.length) pts.push(...s.bendPoints)
+        pts.push(s.endPoint)
+      }
+      // Total arc length
+      let total = 0
+      for (let k = 1; k < pts.length; k++) {
+        const ddx = pts[k].x - pts[k-1].x, ddy = pts[k].y - pts[k-1].y
+        total += Math.sqrt(ddx*ddx + ddy*ddy)
+      }
+      // Walk to half-length
+      let half = total / 2
+      for (let k = 1; k < pts.length; k++) {
+        const ddx = pts[k].x - pts[k-1].x, ddy = pts[k].y - pts[k-1].y
+        const segLen = Math.sqrt(ddx*ddx + ddy*ddy)
+        if (half <= segLen || k === pts.length - 1) {
+          const t2 = segLen > 0 ? Math.min(half / segLen, 1) : 0
+          labelMidX = pts[k-1].x + t2 * ddx
+          labelMidY = pts[k-1].y + t2 * ddy
+          break
+        }
+        half -= segLen
+      }
     }
   }
 
@@ -273,14 +295,16 @@ function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
         const fs = theme.fontSize - 1
         const bgW = textLabel.length * fs * 0.6 + 12
         const bgH = fs + 8
+        // Place label above the line: bottom edge of background sits 3px above path
+        const ly = labelMidY - bgH / 2 - 3
         return (
           <>
             <rect
-              x={labelMidX - bgW / 2} y={labelMidY - bgH / 2}
+              x={labelMidX - bgW / 2} y={ly - bgH / 2}
               width={bgW} height={bgH} rx={3}
               fill={theme.labelBg ?? '#ffffff'} fillOpacity={theme.labelBgOpacity ?? 0.88}
             />
-            <text x={labelMidX} y={labelMidY}
+            <text x={labelMidX} y={ly}
               textAnchor="middle" dominantBaseline="middle"
               fontFamily={theme.font} fontSize={fs} fill={theme.labelText}
               style={{ userSelect: 'none' }}>
@@ -774,38 +798,185 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
               const src = nodeMap[edge.from]
               const tgt = nodeMap[edge.to]
               if (src && tgt) {
-                let startPoint, endPoint
+                let startPoint, endPoint, bendPoints = []
 
                 if (needsBends) {
                   // Use already-translated attachment points from ELK
                   startPoint = sec[0].startPoint
                   endPoint   = sec[sec.length - 1].endPoint
                 } else {
-                  // Compute attachment points from node bounds
+                  // Compute attachment points and route.
+                  //
+                  // Stagger only among edges that are also synthesized (no sections).
+                  // Edges using Phase A ELK sections have their own attachment points
+                  // and must NOT be counted here — otherwise stagger offsets the exit
+                  // point away from the correct vertex (e.g. diamond fail vs ok).
+                  const coEdges = ast.edges.filter((e2, j) => {
+                    if (e2.from !== edge.from) return false
+                    return !edgeMap[`e${j}`]?.sections?.length  // noSections only
+                  })
+                  const coIdx   = coEdges.indexOf(edge)
+                  const stagger = coEdges.length > 1 ? (coIdx - (coEdges.length - 1) / 2) * 9 : 0
+
                   const srcCX = src.x + src.width / 2,  srcCY = src.y + src.height / 2
                   const tgtCX = tgt.x + tgt.width / 2,  tgtCY = tgt.y + tgt.height / 2
                   const dx = tgtCX - srcCX, dy = tgtCY - srcCY
-                  if (Math.abs(dx) >= Math.abs(dy)) {
-                    startPoint = dx > 0 ? { x: src.x + src.width, y: srcCY } : { x: src.x, y: srcCY }
-                    endPoint   = dx > 0 ? { x: tgt.x, y: tgtCY }             : { x: tgt.x + tgt.width, y: tgtCY }
-                  } else {
-                    startPoint = dy > 0 ? { x: srcCX, y: src.y + src.height } : { x: srcCX, y: src.y }
-                    endPoint   = dy > 0 ? { x: tgtCX, y: tgt.y }              : { x: tgtCX, y: tgt.y + tgt.height }
-                  }
-                }
 
-                // Build orthogonal S-shaped bend through the midpoint of the gap
-                const adx = Math.abs(endPoint.x - startPoint.x)
-                const ady = Math.abs(endPoint.y - startPoint.y)
-                let bendPoints
-                if (adx >= ady) {
-                  // Horizontal dominant: exit right/left, bend at gap midpoint, enter left/right
-                  const midX = (startPoint.x + endPoint.x) / 2
-                  bendPoints = [{ x: midX, y: startPoint.y }, { x: midX, y: endPoint.y }]
-                } else {
-                  // Vertical dominant: exit bottom/top, bend at gap midpoint, enter top/bottom
-                  const midY = (startPoint.y + endPoint.y) / 2
-                  bendPoints = [{ x: startPoint.x, y: midY }, { x: endPoint.x, y: midY }]
+                  // Four routing strategies based on relative position and group membership:
+                  //
+                  // sameRow       → S-curve: exit left/right, two bends, arrive left/right.
+                  // sameColumn    → Direct vertical: straight line, arrowhead ↓ or ↑.
+                  // src ungrouped → Vertical-first L-shape: exit top/bottom, travel vertically
+                  //                 (safe because src is outside all groups), turn, arrive left/right.
+                  // src in group  → Horizontal-first L-shape: exit left/right (escaping the group
+                  //                 sideways), turn at target's column, arrive top/bottom.
+                  const sameRow    = Math.abs(dy) < Math.max(src.height, tgt.height) * 0.6
+                  const sameColumn = Math.abs(dx) < (src.width + tgt.width) / 4
+                  const srcGrouped = ast.groups?.some(g => g.nodeIds.includes(edge.from)) ?? false
+
+                  if (sameRow) {
+                    // S-curve (two bends): exit left/right, arrive left/right
+                    const sy = srcCY + stagger
+                    startPoint = dx >= 0 ? { x: src.x + src.width, y: sy } : { x: src.x, y: sy }
+                    endPoint   = dx >= 0 ? { x: tgt.x, y: tgtCY }          : { x: tgt.x + tgt.width, y: tgtCY }
+                    const midX = startPoint.x + (endPoint.x - startPoint.x) * 0.4
+                    bendPoints = [{ x: midX, y: sy }, { x: midX, y: endPoint.y }]
+                  } else if (sameColumn) {
+                    // Direct vertical: stacked nodes → straight line, arrowhead points ↓ or ↑
+                    const sx = srcCX + stagger
+                    if (dy < 0) {
+                      startPoint = { x: sx, y: src.y }
+                      endPoint   = { x: tgtCX, y: tgt.y + tgt.height }
+                    } else {
+                      startPoint = { x: sx, y: src.y + src.height }
+                      endPoint   = { x: tgtCX, y: tgt.y }
+                    }
+                    bendPoints = []
+                  } else if (!srcGrouped) {
+                    // Vertical-first L-shape: source is not inside any group, so the
+                    // vertical segment travels safely outside group boundaries.
+                    //   1. Exit source top/bottom
+                    //   2. Travel vertically to target's Y center
+                    //   3. Turn and arrive at target's left or right side
+                    const sx = srcCX + stagger
+                    const targetEntry = dx >= 0
+                      ? { x: tgt.x,             y: tgtCY }
+                      : { x: tgt.x + tgt.width, y: tgtCY }
+                    startPoint = { x: sx, y: dy < 0 ? src.y : src.y + src.height }
+                    endPoint   = targetEntry
+                    bendPoints = [{ x: sx, y: tgtCY }]
+                  } else {
+                    // Source is inside a group: choose exit direction based on where the
+                    // target sits relative to the SOURCE GROUP bounds, not just the node.
+                    //
+                    //  • Target strictly below/above the source group → exit VERTICALLY
+                    //    (avoids running along the group's side boundary).
+                    //  • Target to the left/right of the source group → exit HORIZONTALLY,
+                    //    clamping the turn column to be past the group boundary.
+                    const srcGroupEntry = ast.groups?.find(g => g.nodeIds.includes(edge.from))
+                    const srcGrp = srcGroupEntry ? groupMap[srcGroupEntry.id] : null
+
+                    const targetBelowGroup = srcGrp && tgt.y        > srcGrp.y + srcGrp.height
+                    const targetAboveGroup = srcGrp && tgt.y + tgt.height < srcGrp.y
+
+                    if (targetBelowGroup || targetAboveGroup) {
+                      // Vertical exit: leave the source node bottom/top.
+                      // Arrive at the target's top/bottom center (arrowhead ↓ or ↑).
+                      // When source and target are at different columns, add a horizontal
+                      // jog in the corridor just outside the source group boundary so the
+                      // path arrives straight down (not diagonally from the side).
+                      const sx = srcCX + stagger
+                      startPoint = targetBelowGroup
+                        ? { x: sx, y: src.y + src.height }
+                        : { x: sx, y: src.y }
+                      endPoint = targetBelowGroup
+                        ? { x: tgtCX, y: tgt.y }
+                        : { x: tgtCX, y: tgt.y + tgt.height }
+
+                      if (Math.abs(sx - tgtCX) < 4) {
+                        // Same column: straight vertical line
+                        bendPoints = []
+                      } else {
+                        // Different column: jog horizontally in the corridor between groups.
+                        //
+                        // 1. corridorY — unique depth per edge (sorted by target X) so no two
+                        //    edges from the same source group share the same horizontal level.
+                        //
+                        // 2. sxJog — exit X sorted by target X within same-source edges, so the
+                        //    edge going to the leftmost target exits leftmost and vice versa.
+                        //    This eliminates "exit left, target right" crossings in the corridor.
+                        const corridorBase = targetBelowGroup
+                          ? (srcGrp ? srcGrp.y + srcGrp.height : src.y + src.height)
+                          : (srcGrp ? srcGrp.y                  : src.y)
+
+                        // All synthesized edges from the same source group using this corridor
+                        const corridorSiblings = ast.edges.filter((e2, j) => {
+                          if (edgeMap[`e${j}`]?.sections?.length) return false
+                          const e2GrpId = ast.groups?.find(g => g.nodeIds.includes(e2.from))?.id
+                          if (e2GrpId !== srcGroupEntry?.id) return false
+                          const e2Tgt = nodeMap[e2.to]
+                          if (!e2Tgt || !srcGrp) return false
+                          return targetBelowGroup
+                            ? e2Tgt.y        > srcGrp.y + srcGrp.height
+                            : e2Tgt.y + e2Tgt.height < srcGrp.y
+                        })
+                        // Sort by target X for unique, ordered corridor depths
+                        const tgtX = (e2) => (nodeMap[e2.to]?.x ?? 0) + (nodeMap[e2.to]?.width ?? 0) / 2
+                        const sortedCorridor = [...corridorSiblings].sort((a, b) => tgtX(a) - tgtX(b))
+                        const corridorIdx = Math.max(0, sortedCorridor.indexOf(edge))
+                        const corridorY = targetBelowGroup
+                          ? corridorBase + 16 + corridorIdx * 12
+                          : corridorBase - 16 - corridorIdx * 12
+
+                        // Sort same-source corridor edges by target X to assign exit X positions:
+                        // leftmost target → leftmost exit, rightmost target → rightmost exit.
+                        const srcSiblings = corridorSiblings.filter(e2 => e2.from === edge.from)
+                        const sortedSrc = [...srcSiblings].sort((a, b) => tgtX(a) - tgtX(b))
+                        const srcIdx = Math.max(0, sortedSrc.indexOf(edge))
+                        const nSrc = srcSiblings.length
+                        const sxJog = nSrc > 1
+                          ? srcCX + (srcIdx - (nSrc - 1) / 2) * 9
+                          : srcCX
+
+                        // Override startPoint to use the sorted exit X
+                        startPoint = targetBelowGroup
+                          ? { x: sxJog, y: src.y + src.height }
+                          : { x: sxJog, y: src.y }
+                        bendPoints = [{ x: sxJog, y: corridorY }, { x: tgtCX, y: corridorY }]
+                      }
+                    } else {
+                      // Horizontal exit: target is left/right (or partially overlapping).
+                      // Clamp the turn column to be outside the group boundary so the path
+                      // never cuts back through the group interior.
+                      const sy = srcCY + stagger
+                      const exitRight = dx >= 0
+
+                      startPoint = exitRight
+                        ? { x: src.x + src.width, y: sy }
+                        : { x: src.x, y: sy }
+
+                      const grpBoundaryX = srcGrp
+                        ? (exitRight ? srcGrp.x + srcGrp.width : srcGrp.x)
+                        : startPoint.x
+                      const safeX = exitRight
+                        ? Math.max(grpBoundaryX, tgtCX)
+                        : Math.min(grpBoundaryX, tgtCX)
+
+                      if (Math.abs(safeX - tgtCX) < 4) {
+                        // Target column is at/past the group boundary: simple L-shape
+                        endPoint = dy < 0
+                          ? { x: tgtCX, y: tgt.y + tgt.height }
+                          : { x: tgtCX, y: tgt.y }
+                        bendPoints = [{ x: safeX, y: sy }]
+                      } else {
+                        // Target column is inside/behind source group: exit to group boundary,
+                        // drop/rise to target row, then approach target from the far side
+                        const tgtEntryX = exitRight ? tgt.x : tgt.x + tgt.width
+                        endPoint = { x: tgtEntryX, y: tgtCY }
+                        bendPoints = [{ x: safeX, y: sy }, { x: safeX, y: tgtCY }]
+                      }
+                    }
+                  }
                 }
 
                 elkEdge = { ...elkEdge, sections: [{ startPoint, endPoint, bendPoints }] }
