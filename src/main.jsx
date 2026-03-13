@@ -4,13 +4,24 @@ import './index.css'
 import { I18nProvider } from './lib/i18n.jsx'
 import App from './App.jsx'
 import SharedDiagramPage from './components/SharedDiagramPage.jsx'
+import AdminPage from './pages/AdminPage.jsx'
+import PricingPage from './pages/PricingPage.jsx'
+import TermsPage from './pages/TermsPage.jsx'
+import PrivacyPage from './pages/PrivacyPage.jsx'
+import GalleryPage from './pages/GalleryPage.jsx'
 
-const isSharedPage = window.location.pathname.startsWith('/s/')
+const path = window.location.pathname
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <I18nProvider>
-      {isSharedPage ? <SharedDiagramPage /> : <App />}
+      {path.startsWith('/s/') ? <SharedDiagramPage /> :
+       path === '/admin'   ? <AdminPage /> :
+       path === '/pricing' ? <PricingPage /> :
+       path === '/terms'   ? <TermsPage /> :
+       path === '/privacy' ? <PrivacyPage /> :
+       path === '/gallery' ? <GalleryPage /> :
+       <App />}
     </I18nProvider>
   </StrictMode>,
 )

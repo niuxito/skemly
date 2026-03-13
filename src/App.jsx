@@ -39,6 +39,7 @@ export default function App() {
     sessionTitleDraft, setSessionTitleDraft,
     cloudLoading, anonToImport,
     updateCurrentSession,
+    updateThumbnail,
     handleNewSession,
     handleSwitchSession,
     handleDeleteSession,
@@ -144,6 +145,28 @@ export default function App() {
     ...(ast?.diagnostics ?? []),
     ...(layoutError ? [{ line: 0, msg: `${tFn('layout_error_prefix')}: ${layoutError}` }] : []),
   ]
+
+  // ─── Thumbnail capture (debounced 2s after layout renders) ───────────────
+  const thumbnailTimerRef = useRef(null)
+  useEffect(() => {
+    if (!elkLayout || !svgRef.current) return
+    const sessionId = (sessions.find(s => s.id === activeSessionId) ?? sessions[0])?.id
+    if (!sessionId) return
+    clearTimeout(thumbnailTimerRef.current)
+    thumbnailTimerRef.current = setTimeout(() => {
+      try {
+        const svgEl = svgRef.current
+        if (!svgEl) return
+        const serializer = new XMLSerializer()
+        const raw = serializer.serializeToString(svgEl)
+        // Add XML declaration and namespace so it renders as standalone SVG
+        const svgString = raw.startsWith('<?xml') ? raw : `<?xml version="1.0" encoding="UTF-8"?>${raw}`
+        updateThumbnail(sessionId, svgString)
+      } catch { /* serialization failed — skip */ }
+    }, 2000)
+    return () => clearTimeout(thumbnailTimerRef.current)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [elkLayout, activeSessionId])
 
   // ─── Shared session bar props ─────────────────────────────────────────────
   const sessionBarProps = {
@@ -318,6 +341,13 @@ export default function App() {
         defaultTab={authDefaultTab}
         defaultEmail={authDefaultEmail}
       />
+
+      {/* ─── Footer ──────────────────────────────────────────────────── */}
+      <footer className="shrink-0 flex items-center justify-center gap-4 px-4 py-1 bg-white border-t border-slate-100 text-xs text-slate-400">
+        <a href="/terms" className="hover:text-slate-600 transition-colors">Términos de Servicio</a>
+        <span className="opacity-30">·</span>
+        <a href="/privacy" className="hover:text-slate-600 transition-colors">Privacidad</a>
+      </footer>
     </div>
   )
 }

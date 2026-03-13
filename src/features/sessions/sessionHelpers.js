@@ -1,3 +1,10 @@
+// ─── Plan limits (client-side reference) ──────────────────────────────────────
+export const CLIENT_PLAN_LIMITS = {
+  free:    { daily_requests: 20,   daily_files: 2 },
+  starter: { daily_requests: 50,   daily_files: 10 },
+  pro:     { daily_requests: null, daily_files: null },
+}
+
 // ─── Session factory & derivation ─────────────────────────────────────────────
 export const isPaid = (user) => user?.plan === 'pro' || user?.plan === 'starter'
 

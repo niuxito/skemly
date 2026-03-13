@@ -1,19 +1,42 @@
 /**
  * Vercel serverless function — proxies POST /api/chat to Anthropic.
  * ANTHROPIC_API_KEY is read from Vercel environment variables (never exposed to the client).
- * Rate limiting via Neon PostgreSQL (DATABASE_URL + DAILY_LIMIT env vars).
+ * Rate limiting via Neon PostgreSQL (DATABASE_URL + plan-based limits).
  */
-import { checkRateLimit, checkFileRateLimit, incrementFileCount, checkAndIncrementInjectionAttempt } from './_rateLimit.js'
+import {
+  checkRateLimit,
+  checkFileRateLimit,
+  incrementFileCount,
+  checkAndIncrementInjectionAttempt,
+  checkRateLimitByUser,
+  incrementRequestCountByUser,
+  checkFileRateLimitByUser,
+  incrementFileCountByUser,
+} from './_rateLimit.js'
 import { buildAnthropicBody } from './_buildAnthropicBody.js'
 import { detectInjection } from './_promptGuard.js'
 import { checkCsrf } from './_csrf.js'
+import { getUserFromRequest } from './_auth.js'
+import { resolveUserFeatures } from './_plans.js'
+import { neon } from '@neondatabase/serverless'
 
 const FILE_MAX_SIZE = parseInt(process.env.FILE_MAX_SIZE_ANON ?? String(2 * 1024 * 1024), 10)
-const FILE_DAILY_LIMIT = parseInt(process.env.FILE_DAILY_LIMIT_ANON ?? '5', 10)
 
-const MODEL_FIRSTSHOT = process.env.AI_MODEL_FIRSTSHOT ?? 'claude-sonnet-4-6'
-const MODEL_EDIT = process.env.AI_MODEL_EDIT ?? 'claude-haiku-4-5-20251001'
-const MODEL_PRO = process.env.AI_MODEL_PRO ?? 'claude-sonnet-4-6'
+const MODEL_FIRSTSHOT     = process.env.AI_MODEL_FIRSTSHOT  ?? 'claude-sonnet-4-6'
+const MODEL_EDIT          = process.env.AI_MODEL_EDIT       ?? 'claude-haiku-4-5-20251001'
+const MODEL_PRO_FIRSTSHOT = process.env.AI_MODEL_PRO        ?? 'claude-sonnet-4-6'
+const MODEL_PRO_EDIT      = process.env.AI_MODEL_PRO_EDIT   ?? 'claude-haiku-4-5-20251001'
+
+function nextMidnightUTC() {
+  const now = new Date()
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1)).toISOString()
+}
+
+function upgradeTo(plan) {
+  if (plan === 'free') return 'starter'
+  if (plan === 'starter') return 'pro'
+  return null
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -28,11 +51,35 @@ export default async function handler(req, res) {
 
   const ip = (req.headers['x-forwarded-for'] ?? '127.0.0.1').split(',')[0].trim()
 
+  // ─── Auth + plan resolution ───────────────────────────────────────────────
+  const jwtPayload = getUserFromRequest(req)
+  let userId = null
+  let userPlan = 'free'
+
+  if (jwtPayload?.sub) {
+    userId = jwtPayload.sub
+    // Fetch current plan from DB (JWT may be stale)
+    try {
+      const sql = neon(process.env.DATABASE_URL)
+      const rows = await sql`SELECT plan FROM users WHERE id = ${userId}`
+      userPlan = rows[0]?.plan ?? 'free'
+    } catch (err) {
+      console.error('[chat] plan lookup error:', err.message)
+    }
+  }
+
+  const limits = await resolveUserFeatures({
+    userId,
+    userPlan,
+    databaseUrl: process.env.DATABASE_URL,
+  })
+
   // ─── Request rate limiting ────────────────────────────────────────────────
-  const rl = await checkRateLimit({
+  const rl = await checkRateLimitByUser({
+    userId,
     ip,
     databaseUrl: process.env.DATABASE_URL,
-    dailyLimit: parseInt(process.env.DAILY_LIMIT ?? '20', 10),
+    dailyLimit: limits.daily_requests,
   })
 
   if (!rl.allowed) {
@@ -40,14 +87,16 @@ export default async function handler(req, res) {
       error: {
         type: 'rate_limit_exceeded',
         limit: rl.limit,
-        reset_at: rl.resetAt,
+        reset_at: nextMidnightUTC(),
         remaining: 0,
+        plan: userPlan,
+        upgrade_to: upgradeTo(userPlan),
       },
     })
   }
 
-  if (rl.remaining !== null) {
-    res.setHeader('X-RateLimit-Remaining', String(rl.remaining))
+  if (rl.limit !== null && rl.remaining !== undefined) {
+    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, rl.limit - (rl.count ?? 0) - 1)))
   }
 
   // ─── File attachment validation & rate limiting ───────────────────────────
@@ -64,10 +113,11 @@ export default async function handler(req, res) {
       })
     }
 
-    const frl = await checkFileRateLimit({
+    const frl = await checkFileRateLimitByUser({
+      userId,
       ip,
       databaseUrl: process.env.DATABASE_URL,
-      dailyLimit: FILE_DAILY_LIMIT,
+      dailyFileLimit: limits.daily_files,
     })
 
     if (!frl.allowed) {
@@ -75,14 +125,16 @@ export default async function handler(req, res) {
         error: {
           type: 'file_rate_limit_exceeded',
           limit: frl.limit,
-          reset_at: frl.resetAt,
+          reset_at: nextMidnightUTC(),
           remaining: 0,
+          plan: userPlan,
+          upgrade_to: upgradeTo(userPlan),
         },
       })
     }
 
-    if (frl.remaining !== null) {
-      res.setHeader('X-FileRateLimit-Remaining', String(frl.remaining))
+    if (frl.limit !== null) {
+      res.setHeader('X-FileRateLimit-Remaining', String(Math.max(0, frl.limit - (frl.count ?? 0) - 1)))
     }
   }
 
@@ -102,10 +154,12 @@ export default async function handler(req, res) {
     })
   }
 
-  // ─── Model selection (first-shot vs edit) ────────────────────────────────
+  // ─── Model selection ──────────────────────────────────────────────────────
   const { isFirstShot } = req.body
-  // TODO: check user plan when auth is wired up (userPlan === 'pro' → MODEL_PRO)
-  const selectedModel = isFirstShot ? MODEL_FIRSTSHOT : MODEL_EDIT
+  const isPro = limits.model_tier === 'pro'
+  const selectedModel = isPro
+    ? (isFirstShot ? MODEL_PRO_FIRSTSHOT : MODEL_PRO_EDIT)
+    : (isFirstShot ? MODEL_FIRSTSHOT : MODEL_EDIT)
 
   // ─── Proxy to Anthropic ───────────────────────────────────────────────────
   try {
@@ -123,9 +177,15 @@ export default async function handler(req, res) {
       body: JSON.stringify(anthropicBody),
     })
 
-    // Only charge the file counter when Anthropic actually accepted the file
-    if (attachment && upstream.ok) {
-      incrementFileCount({ ip, databaseUrl: process.env.DATABASE_URL }).catch(() => {})
+    if (upstream.ok) {
+      // Increment request count for authenticated users (anon already incremented in checkRateLimit)
+      if (userId) {
+        incrementRequestCountByUser({ userId, ip, databaseUrl: process.env.DATABASE_URL }).catch(() => {})
+      }
+      // Charge file counter only when Anthropic accepted the file
+      if (attachment) {
+        incrementFileCountByUser({ userId, ip, databaseUrl: process.env.DATABASE_URL }).catch(() => {})
+      }
     }
 
     const data = await upstream.json()

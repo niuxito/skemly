@@ -10,7 +10,12 @@ export default async function handler(req, res) {
   }
   if (checkCsrf(req, res)) return
 
-  const { email, password, name } = req.body ?? {}
+  const { email, password, name, termsAccepted } = req.body ?? {}
+
+  // Terms acceptance validation
+  if (termsAccepted !== true) {
+    return res.status(400).json({ error: 'Debes aceptar los Términos de Servicio para registrarte.' })
+  }
 
   // Basic validation
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -55,8 +60,8 @@ export default async function handler(req, res) {
   const otpExpiry = new Date(Date.now() + 15 * 60 * 1000) // 15 min
 
   const rows = await sql`
-    INSERT INTO users (email, password_hash, name, verify_otp, verify_otp_expires_at, verify_otp_sent_at)
-    VALUES (${email.toLowerCase()}, ${passwordHash}, ${trimmedName}, ${otp}, ${otpExpiry}, NOW())
+    INSERT INTO users (email, password_hash, name, verify_otp, verify_otp_expires_at, verify_otp_sent_at, terms_accepted_at)
+    VALUES (${email.toLowerCase()}, ${passwordHash}, ${trimmedName}, ${otp}, ${otpExpiry}, NOW(), NOW())
     RETURNING id, email, name
   `
   const user = rows[0]

@@ -28,21 +28,26 @@ export default async function handler(req, res) {
   }
 
   const PAID_PLANS = ['pro', 'starter']
-  if (!PAID_PLANS.includes(user.plan)) {
-    return res.status(403).json({ error: 'Plan upgrade required' })
-  }
 
   const sql = neon(databaseUrl)
+
+  // Look up plan from DB — JWT does not carry plan to avoid stale data
+  const planRows = await sql`SELECT plan FROM users WHERE id = ${user.sub}`
+  const userPlan = planRows[0]?.plan ?? 'free'
+  if (!PAID_PLANS.includes(userPlan)) {
+    return res.status(403).json({ error: 'Plan upgrade required' })
+  }
 
   // ── GET /api/sessions ────────────────────────────────────────────────────
   if (req.method === 'GET') {
     const rows = await sql`
       SELECT id, title, dsl, messages, chat_history AS "chatHistory",
              title_manual AS "titleManual",
+             thumbnail_svg AS "thumbnailSvg",
              EXTRACT(EPOCH FROM created_at) * 1000 AS "createdAt",
              EXTRACT(EPOCH FROM updated_at) * 1000 AS "updatedAt"
       FROM user_sessions
-      WHERE user_id = ${user.id}
+      WHERE user_id = ${user.sub}
       ORDER BY updated_at DESC
     `
     return res.status(200).json({ sessions: rows })
@@ -53,7 +58,7 @@ export default async function handler(req, res) {
 
   // ── POST /api/sessions ───────────────────────────────────────────────────
   if (req.method === 'POST') {
-    const { id, title, dsl, messages, chatHistory, titleManual } = req.body ?? {}
+    const { id, title, dsl, messages, chatHistory, titleManual, thumbnailSvg } = req.body ?? {}
     if (!id) {
       return res.status(400).json({ error: 'Missing id' })
     }
@@ -62,23 +67,25 @@ export default async function handler(req, res) {
     const cleanHistory  = stripAttachments(chatHistory ?? [])
 
     await sql`
-      INSERT INTO user_sessions (id, user_id, title, dsl, messages, chat_history, title_manual)
+      INSERT INTO user_sessions (id, user_id, title, dsl, messages, chat_history, title_manual, thumbnail_svg)
       VALUES (
         ${id},
-        ${user.id},
+        ${user.sub},
         ${title ?? 'Nueva sesión'},
         ${dsl ?? ''},
         ${JSON.stringify(cleanMessages)},
         ${JSON.stringify(cleanHistory)},
-        ${titleManual ?? false}
+        ${titleManual ?? false},
+        ${thumbnailSvg ?? null}
       )
       ON CONFLICT (id) DO UPDATE SET
-        title       = EXCLUDED.title,
-        dsl         = EXCLUDED.dsl,
-        messages    = EXCLUDED.messages,
+        title        = EXCLUDED.title,
+        dsl          = EXCLUDED.dsl,
+        messages     = EXCLUDED.messages,
         chat_history = EXCLUDED.chat_history,
         title_manual = EXCLUDED.title_manual,
-        updated_at  = NOW()
+        thumbnail_svg = EXCLUDED.thumbnail_svg,
+        updated_at   = NOW()
     `
     return res.status(200).json({ ok: true })
   }
@@ -90,19 +97,20 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing id' })
     }
 
-    const { title, dsl, messages, chatHistory, titleManual } = req.body ?? {}
+    const { title, dsl, messages, chatHistory, titleManual, thumbnailSvg } = req.body ?? {}
     const cleanMessages = stripAttachments(messages ?? [])
     const cleanHistory  = stripAttachments(chatHistory ?? [])
 
     const result = await sql`
       UPDATE user_sessions SET
-        title        = ${title ?? 'Nueva sesión'},
-        dsl          = ${dsl ?? ''},
-        messages     = ${JSON.stringify(cleanMessages)},
-        chat_history = ${JSON.stringify(cleanHistory)},
-        title_manual = ${titleManual ?? false},
-        updated_at   = NOW()
-      WHERE id = ${id} AND user_id = ${user.id}
+        title         = ${title ?? 'Nueva sesión'},
+        dsl           = ${dsl ?? ''},
+        messages      = ${JSON.stringify(cleanMessages)},
+        chat_history  = ${JSON.stringify(cleanHistory)},
+        title_manual  = ${titleManual ?? false},
+        thumbnail_svg = ${thumbnailSvg ?? null},
+        updated_at    = NOW()
+      WHERE id = ${id} AND user_id = ${user.sub}
     `
     if (result.count === 0) {
       return res.status(404).json({ error: 'Session not found' })
@@ -117,7 +125,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing id' })
     }
 
-    await sql`DELETE FROM user_sessions WHERE id = ${id} AND user_id = ${user.id}`
+    await sql`DELETE FROM user_sessions WHERE id = ${id} AND user_id = ${user.sub}`
     return res.status(200).json({ ok: true })
   }
 

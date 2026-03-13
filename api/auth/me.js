@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
   // Verify session is still active and load user data in one query
   const rows = await sql`
-    SELECT u.id, u.email, u.name, u.email_verified, u.plan, u.plan_expires_at
+    SELECT u.id, u.email, u.name, u.email_verified, u.plan, u.plan_expires_at, u.is_admin
     FROM users u
     JOIN auth_sessions s ON s.user_id = u.id
     WHERE u.id = ${payload.sub}
@@ -42,6 +42,6 @@ export default async function handler(req, res) {
 
   const user = rows[0]
   return res.status(200).json({
-    user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified, plan: user.plan, plan_expires_at: user.plan_expires_at },
+    user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified, plan: user.plan, plan_expires_at: user.plan_expires_at, is_admin: user.is_admin ?? false },
   })
 }

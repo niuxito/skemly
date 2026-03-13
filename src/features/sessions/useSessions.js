@@ -46,6 +46,13 @@ export function useSessions({ user, authResolved, t }) {
     })
   }, [activeSessionId])
 
+  // ─── Thumbnail update ────────────────────────────────────────────────────
+  const updateThumbnail = useCallback((sessionId, svgString) => {
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId ? { ...s, thumbnailSvg: svgString } : s
+    ))
+  }, [])
+
   // ─── Session callbacks ───────────────────────────────────────────────────
   const handleNewSession = useCallback((onCreated) => {
     const s = createSession('', t('default_session_title'))
@@ -123,7 +130,7 @@ export function useSessions({ user, authResolved, t }) {
 
     // Anonymous sessions that have actual content (skip pristine empties)
     const anonSessions = user
-      ? loadSessions(sessionsKey(null)).filter(s => s.dsl?.trim() || s.messages?.length)
+      ? loadSessions(sessionsKey(null)).filter(s => s.dsl?.trim() || s.messages?.length || s.titleManual)
       : []
 
     function clearAnonStore() {
@@ -137,13 +144,15 @@ export function useSessions({ user, authResolved, t }) {
       const storedActiveId = localStorage.getItem(activeKey(user?.id))
 
       loadedForUserRef.current = user?.id
-      if (saved.length) {
+      // Sessions with real content (non-blank DSL or messages)
+      const savedWithContent = saved.filter(s => s.dsl?.trim() || s.messages?.length)
+      if (savedWithContent.length) {
+        // User has real sessions → load them, offer anon import as optional banner
         setSessions(saved)
         setActiveSessionId(saved.find(s => s.id === storedActiveId) ? storedActiveId : saved[0].id)
-        // Destination occupied: offer import as optional banner
         if (anonSessions.length) setAnonToImport(anonSessions)
       } else if (anonSessions.length) {
-        // Destination empty: auto-migrate silently
+        // User key is empty or has only blank sessions → auto-migrate anon sessions silently
         setSessions(dedupe(anonSessions))
         setActiveSessionId(anonSessions[0].id)
         clearAnonStore()
@@ -212,7 +221,11 @@ export function useSessions({ user, authResolved, t }) {
     // the user's stored sessions with stale initial state.
     if (loadedForUserRef.current !== user?.id) return
     if (!isPaid(user)) {
-      saveSessionsToStorage(sessions, sessionsKey(user?.id))
+      // Strip thumbnailSvg before saving to localStorage — SVGs can be several
+      // hundred KB each and would quickly exceed the 5MB localStorage quota.
+      // Thumbnails for free users are regenerated in-app after each render.
+      const toSave = sessions.map(({ thumbnailSvg: _t, ...rest }) => rest)
+      saveSessionsToStorage(toSave, sessionsKey(user?.id))
     }
   }, [sessions, user?.plan, user?.id, authResolved, cloudLoading])
 
@@ -229,7 +242,7 @@ export function useSessions({ user, authResolved, t }) {
     }, 1500)
     return () => clearTimeout(timer)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSession?.dsl, currentSession?.messages?.length, currentSession?.title, currentSession?.titleManual])
+  }, [currentSession?.dsl, currentSession?.messages?.length, currentSession?.title, currentSession?.titleManual, currentSession?.thumbnailSvg])
 
   // ─── Load example via /examples/:slug URL ───────────────────────────────
   useEffect(() => {
@@ -318,6 +331,7 @@ export function useSessions({ user, authResolved, t }) {
     cloudLoading,
     anonToImport,
     updateCurrentSession,
+    updateThumbnail,
     handleNewSession,
     handleSwitchSession,
     handleDeleteSession,

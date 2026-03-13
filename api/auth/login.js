@@ -35,7 +35,7 @@ export default async function handler(req, res) {
 
   const sql = neon(databaseUrl)
 
-  const rows = await sql`SELECT id, email, name, password_hash, email_verified FROM users WHERE email = ${email.toLowerCase()}`
+  const rows = await sql`SELECT id, email, name, password_hash, email_verified, is_admin FROM users WHERE email = ${email.toLowerCase()}`
 
   // Same error for wrong email or wrong password (no enumeration)
   const GENERIC_ERROR = 'Email o contraseña incorrectos'
@@ -58,5 +58,5 @@ export default async function handler(req, res) {
   const token = signToken({ sub: user.id, email: user.email, sid: session.id })
   setAuthCookie(res, token)
 
-  return res.status(200).json({ user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified } })
+  return res.status(200).json({ user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified, is_admin: user.is_admin ?? false } })
 }

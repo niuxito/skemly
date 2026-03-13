@@ -15,6 +15,7 @@ export default function AuthModal({
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [otp, setOtp] = useState('')
+  const [termsAccepted, setTermsAccepted] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [resendCooldown, setResendCooldown] = useState(0)
@@ -29,6 +30,7 @@ export default function AuthModal({
       setPassword('')
       setName('')
       setOtp('')
+      setTermsAccepted(false)
       setError('')
       setLoading(false)
     }
@@ -84,7 +86,7 @@ export default function AuthModal({
     const endpoint = tab === 'login' ? '/api/auth/login' : '/api/auth/register'
     const body = tab === 'login'
       ? { email, password }
-      : { email, password, name: name.trim() || undefined }
+      : { email, password, name: name.trim() || undefined, termsAccepted: true }
 
     try {
       const res = await fetch(endpoint, {
@@ -300,11 +302,28 @@ export default function AuthModal({
               />
             </div>
 
+            {tab === 'register' && (
+              <label className="flex items-start gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={termsAccepted}
+                  onChange={e => setTermsAccepted(e.target.checked)}
+                  className="mt-0.5 shrink-0 accent-slate-800"
+                />
+                <span className="text-xs text-slate-600 leading-snug">
+                  Acepto los{' '}
+                  <a href="/terms" target="_blank" rel="noopener noreferrer" className="underline text-slate-800 hover:text-slate-600">Términos de Servicio</a>
+                  {' '}y la{' '}
+                  <a href="/privacy" target="_blank" rel="noopener noreferrer" className="underline text-slate-800 hover:text-slate-600">Política de Privacidad</a>
+                </span>
+              </label>
+            )}
+
             {error && <p className="text-xs text-red-600">{error}</p>}
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (tab === 'register' && !termsAccepted)}
               className="w-full py-2 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50 bg-slate-800 text-white hover:bg-slate-700"
             >
               {loading

@@ -1,4 +1,4 @@
-import { Download, Copy, Check, BookOpen, ChevronDown, Link, LogOut, Globe } from 'lucide-react'
+import { Download, Copy, Check, BookOpen, ChevronDown, Link, LogOut, Globe, Zap, LayoutGrid } from 'lucide-react'
 import { useDropdown } from '../hooks/useDropdown.js'
 import { useT, useI18n } from '../lib/i18n.jsx'
 
@@ -34,10 +34,38 @@ export default function Header({
           <BookOpen size={12} />
           <span className="hidden md:inline">{t('examples')}</span>
         </button>
+        <a
+          href="/pricing"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-all bg-white border border-slate-200 text-slate-600 hover:bg-slate-50"
+        >
+          <span className="hidden md:inline">Planes</span>
+          <span className="md:hidden">Planes</span>
+        </a>
       </div>
 
       {/* Action buttons */}
       <div className="flex items-center gap-1.5">
+        {/* Upgrade CTA for free users */}
+        {(!user || user.plan === 'free') && (
+          <a
+            href="/pricing"
+            className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-semibold bg-slate-800 text-white hover:bg-slate-700 transition-colors"
+          >
+            <Zap size={11} />
+            <span className="hidden sm:inline">Upgrade</span>
+          </a>
+        )}
+
+        {/* Gallery */}
+        <a
+          href="/gallery"
+          className="flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-50"
+          title="Ver galería de diagramas"
+        >
+          <LayoutGrid size={12} />
+          <span className="hidden sm:inline">Galería</span>
+        </a>
+
         {/* Share */}
         <button
           onClick={onShare}

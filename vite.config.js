@@ -13,6 +13,11 @@ import verifyOtpHandler from './api/auth/verify-otp.js'
 import resendVerificationHandler from './api/auth/resend-verification.js'
 import shareHandler from './api/share.js'
 import sessionsHandler from './api/sessions.js'
+import adminUsersHandler from './api/admin/users.js'
+import adminPlanConfigHandler from './api/admin/plan-config.js'
+import stripeCheckoutHandler from './api/stripe/checkout.js'
+import stripePortalHandler from './api/stripe/portal.js'
+import stripeWebhookHandler from './api/stripe/webhook.js'
 
 /**
  * Wraps Vite's raw Node http req/res into the Vercel-style interface
@@ -96,6 +101,74 @@ function authPlugin() {
       server.middlewares.use('/api/auth/me',                   (req, res) => runAuthHandler(meHandler,                  req, res))
       server.middlewares.use('/api/auth/verify-otp',           (req, res) => runAuthHandler(verifyOtpHandler,           req, res))
       server.middlewares.use('/api/auth/resend-verification',  (req, res) => runAuthHandler(resendVerificationHandler,  req, res))
+    },
+  }
+}
+
+function stripePlugin() {
+  return {
+    name: 'stripe-proxy',
+    configureServer(server) {
+      // checkout and portal: standard JSON body handlers
+      server.middlewares.use('/api/stripe/checkout', (req, res) => runAuthHandler(stripeCheckoutHandler, req, res))
+      server.middlewares.use('/api/stripe/portal',   (req, res) => runAuthHandler(stripePortalHandler,   req, res))
+
+      // webhook: needs raw body for Stripe signature verification
+      server.middlewares.use('/api/stripe/webhook', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: 'Method not allowed' }))
+          return
+        }
+
+        // Pass the raw Node req/res directly — webhook handler buffers raw body itself
+        const vercelRes = {
+          _status: 200,
+          _headers: {},
+          status(code) { this._status = code; return this },
+          setHeader(name, value) { this._headers[name] = value; return this },
+          json(data) {
+            res.statusCode = this._status
+            res.setHeader('Content-Type', 'application/json')
+            for (const [k, v] of Object.entries(this._headers)) res.setHeader(k, v)
+            res.end(JSON.stringify(data))
+          },
+        }
+
+        try {
+          await stripeWebhookHandler(req, vercelRes)
+        } catch (err) {
+          res.statusCode = 500
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: err.message ?? 'Internal server error' }))
+        }
+      })
+    },
+  }
+}
+
+function adminPlugin() {
+  return {
+    name: 'admin-proxy',
+    configureServer(server) {
+      // Order matters: more specific (override) before general (users list)
+      server.middlewares.use('/api/admin/plan-config', (req, res) => {
+        const url = new URL(req.url, 'http://x')
+        runAuthHandler(
+          (vReq, vRes) => adminPlanConfigHandler({ ...vReq, url: `/api/admin/plan-config${url.pathname}` }, vRes),
+          req,
+          res,
+        )
+      })
+      server.middlewares.use('/api/admin/users', (req, res) => {
+        const url = new URL(req.url, 'http://x')
+        runAuthHandler(
+          (vReq, vRes) => adminUsersHandler({ ...vReq, url: `/api/admin/users${url.pathname}` }, vRes),
+          req,
+          res,
+        )
+      })
     },
   }
 }
@@ -259,10 +332,15 @@ export default defineConfig(({ mode }) => {
 
   // Expose server-side env vars to API handlers running inside the dev server.
   // (loadEnv returns an object but does NOT mutate process.env)
-  process.env.DATABASE_URL  = process.env.DATABASE_URL  ?? env.DATABASE_URL
-  process.env.JWT_SECRET    = process.env.JWT_SECRET    ?? env.JWT_SECRET
-  process.env.RESEND_API_KEY = process.env.RESEND_API_KEY ?? env.RESEND_API_KEY
-  process.env.FROM_EMAIL    = process.env.FROM_EMAIL    ?? env.FROM_EMAIL
+  process.env.DATABASE_URL          = process.env.DATABASE_URL          ?? env.DATABASE_URL
+  process.env.JWT_SECRET            = process.env.JWT_SECRET            ?? env.JWT_SECRET
+  process.env.RESEND_API_KEY        = process.env.RESEND_API_KEY        ?? env.RESEND_API_KEY
+  process.env.FROM_EMAIL            = process.env.FROM_EMAIL            ?? env.FROM_EMAIL
+  process.env.STRIPE_SECRET_KEY     = process.env.STRIPE_SECRET_KEY     ?? env.STRIPE_SECRET_KEY
+  process.env.STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET ?? env.STRIPE_WEBHOOK_SECRET
+  process.env.STRIPE_PRICE_STARTER  = process.env.STRIPE_PRICE_STARTER  ?? env.STRIPE_PRICE_STARTER
+  process.env.STRIPE_PRICE_PRO      = process.env.STRIPE_PRICE_PRO      ?? env.STRIPE_PRICE_PRO
+  process.env.APP_URL               = process.env.APP_URL               ?? env.APP_URL
 
   return {
     plugins: [
@@ -271,6 +349,8 @@ export default defineConfig(({ mode }) => {
       authPlugin(),
       sharePlugin(),
       sessionsPlugin(),
+      adminPlugin(),
+      stripePlugin(),
       anthropicProxyPlugin(
         env.ANTHROPIC_API_KEY,
         env.DATABASE_URL,

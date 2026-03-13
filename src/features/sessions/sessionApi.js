@@ -12,6 +12,7 @@ export async function postSessionToDB(session) {
       messages: session.messages,
       chatHistory: session.chatHistory,
       titleManual: session.titleManual,
+      thumbnailSvg: session.thumbnailSvg ?? null,
     }),
   })
 }
@@ -26,6 +27,7 @@ export async function putSessionToDB(session) {
       messages: session.messages,
       chatHistory: session.chatHistory,
       titleManual: session.titleManual,
+      thumbnailSvg: session.thumbnailSvg ?? null,
     }),
   })
 }
