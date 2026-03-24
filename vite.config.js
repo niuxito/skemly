@@ -13,11 +13,9 @@ import verifyOtpHandler from './api/auth/verify-otp.js'
 import resendVerificationHandler from './api/auth/resend-verification.js'
 import shareHandler from './api/share.js'
 import sessionsHandler from './api/sessions.js'
-import adminUsersHandler from './api/admin/users.js'
-import adminPlanConfigHandler from './api/admin/plan-config.js'
-import stripeCheckoutHandler from './api/stripe/checkout.js'
-import stripePortalHandler from './api/stripe/portal.js'
-import stripeWebhookHandler from './api/stripe/webhook.js'
+import adminHandler from './api/admin.js'
+import stripeHandler from './api/stripe.js'
+import stripeWebhookHandler from './api/stripe-webhook.js'
 
 /**
  * Wraps Vite's raw Node http req/res into the Vercel-style interface
@@ -109,9 +107,9 @@ function stripePlugin() {
   return {
     name: 'stripe-proxy',
     configureServer(server) {
-      // checkout and portal: standard JSON body handlers
-      server.middlewares.use('/api/stripe/checkout', (req, res) => runAuthHandler(stripeCheckoutHandler, req, res))
-      server.middlewares.use('/api/stripe/portal',   (req, res) => runAuthHandler(stripePortalHandler,   req, res))
+      // checkout and portal: standard JSON body handlers (routed by req.url inside stripeHandler)
+      server.middlewares.use('/api/stripe/checkout', (req, res) => runAuthHandler(stripeHandler, req, res))
+      server.middlewares.use('/api/stripe/portal',   (req, res) => runAuthHandler(stripeHandler, req, res))
 
       // webhook: needs raw body for Stripe signature verification
       server.middlewares.use('/api/stripe/webhook', async (req, res) => {
@@ -156,7 +154,7 @@ function adminPlugin() {
       server.middlewares.use('/api/admin/plan-config', (req, res) => {
         const url = new URL(req.url, 'http://x')
         runAuthHandler(
-          (vReq, vRes) => adminPlanConfigHandler({ ...vReq, url: `/api/admin/plan-config${url.pathname}` }, vRes),
+          (vReq, vRes) => adminHandler({ ...vReq, url: `/api/admin/plan-config${url.pathname}` }, vRes),
           req,
           res,
         )
@@ -164,7 +162,7 @@ function adminPlugin() {
       server.middlewares.use('/api/admin/users', (req, res) => {
         const url = new URL(req.url, 'http://x')
         runAuthHandler(
-          (vReq, vRes) => adminUsersHandler({ ...vReq, url: `/api/admin/users${url.pathname}` }, vRes),
+          (vReq, vRes) => adminHandler({ ...vReq, url: `/api/admin/users${url.pathname}` }, vRes),
           req,
           res,
         )
