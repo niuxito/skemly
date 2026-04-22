@@ -1,0 +1,24 @@
+vibe: clean
+layout: TREE
+
+// Company org chart — strict top-down tree, BFS level-by-level
+
+[ceo|CEO]@icon=User@bg=#1e293b@color=#f8fafc
+
+[ceo|CEO] -> [cto|CTO]@icon=Cpu
+[ceo|CEO] -> [cpo|CPO]@icon=LayoutTemplate
+[ceo|CEO] -> [cfo|CFO]@icon=DollarSign
+
+[cto|CTO] -> [eng1|Backend Lead]@icon=Server
+[cto|CTO] -> [eng2|Frontend Lead]@icon=Monitor
+[cto|CTO] -> [eng3|Infra Lead]@icon=Cloud
+
+[cpo|CPO] -> [pm1|Product Manager]@icon=ClipboardList
+[cpo|CPO] -> [des1|Head of Design]@icon=Pen
+
+[cfo|CFO] -> [fin1|Finance Manager]@icon=TrendingUp
+[cfo|CFO] -> [leg1|Legal Counsel]@icon=Scale
+
+[eng1|Backend Lead] -> [dev1|Backend Dev ×3]
+[eng2|Frontend Lead] -> [dev2|Frontend Dev ×2]
+[eng3|Infra Lead] -> [dev3|DevOps ×2]

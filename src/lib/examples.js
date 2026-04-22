@@ -10,6 +10,9 @@ import ex09 from '../../examples/09-microservices-saga.vibe?raw'
 import ex10 from '../../examples/10-rag-llm-pipeline.vibe?raw'
 import ex11 from '../../examples/11-economia-edad-media.vibe?raw'
 import ex12 from '../../examples/12-fases-lunares.vibe?raw'
+import ex13 from '../../examples/13-org-chart.vibe?raw'
+import ex14 from '../../examples/14-er-diagram.vibe?raw'
+import ex15 from '../../examples/15-sequence-api.vibe?raw'
 
 export const EXAMPLES = [
   {
@@ -120,6 +123,33 @@ export const EXAMPLES = [
     theme: 'clean',
     dsl: ex12,
   },
+  {
+    id: '13',
+    slug: 'org-chart',
+    title: 'Org Chart',
+    description: 'Jerarquía de empresa con layout TREE top-down nivel a nivel',
+    type: 'Tree',
+    theme: 'clean',
+    dsl: ex13,
+  },
+  {
+    id: '14',
+    slug: 'er-diagram',
+    title: 'ER Diagram — E-commerce',
+    description: 'Schema de base de datos con entidades, atributos y cardinalidades',
+    type: 'ER',
+    theme: 'clean',
+    dsl: ex14,
+  },
+  {
+    id: '15',
+    slug: 'sequence-api',
+    title: 'Sequence — API Login',
+    description: 'Flujo REST de autenticación JWT con actores y mensajes ordenados',
+    type: 'Sequence',
+    theme: 'clean',
+    dsl: ex15,
+  },
 ]
 
 export function getExampleBySlug(slug) {
@@ -134,6 +164,9 @@ export const TYPE_COLORS = {
   'Network':      'bg-red-100 text-red-700',
   'AI / ML':      'bg-pink-100 text-pink-700',
   'Education':    'bg-yellow-100 text-yellow-700',
+  'Tree':         'bg-teal-100 text-teal-700',
+  'ER':           'bg-indigo-100 text-indigo-700',
+  'Sequence':     'bg-violet-100 text-violet-700',
 }
 
 export const THEME_COLORS = {

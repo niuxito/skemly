@@ -1,0 +1,21 @@
+vibe: clean
+layout: SEQ
+
+// REST API login flow — sequence diagram with actors and ordered messages
+
+[Browser] -> [API Gateway] : POST /auth/login
+[API Gateway] -> [Auth Service] : validate credentials
+[Auth Service] -> [User DB] : SELECT user WHERE email
+[User DB] -> [Auth Service] : user record
+[Auth Service] -> [Auth Service] : verify password hash
+[Auth Service] -> [Token Service] : issue JWT
+[Token Service] -> [Auth Service] : signed JWT
+[Auth Service] -> [API Gateway] : 200 OK + token
+[API Gateway] -> [Browser] : Set-Cookie: session
+
+[Browser] -> [API Gateway] : GET /api/profile
+[API Gateway] -> [Auth Service] : verify JWT
+[Auth Service] -> [API Gateway] : user_id + claims
+[API Gateway] -> [User DB] : SELECT profile WHERE id
+[User DB] -> [API Gateway] : profile data
+[API Gateway] -> [Browser] : 200 OK + profile JSON

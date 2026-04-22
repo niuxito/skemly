@@ -1,0 +1,17 @@
+vibe: clean
+layout: ER
+
+// E-commerce database schema — ER diagram with card nodes for entities
+
+{users|User|id UUID PK\nemail VARCHAR UNIQUE\nname VARCHAR\nplan VARCHAR\ncreated_at TIMESTAMP}
+{products|Product|id UUID PK\nname VARCHAR\nprice DECIMAL\nstock INT\ncategory_id FK}
+{categories|Category|id UUID PK\nname VARCHAR\nslug VARCHAR}
+{orders|Order|id UUID PK\nuser_id FK\nstatus VARCHAR\ntotal DECIMAL\ncreated_at TIMESTAMP}
+{order_items|Order Item|id UUID PK\norder_id FK\nproduct_id FK\nquantity INT\nunit_price DECIMAL}
+{addresses|Address|id UUID PK\nuser_id FK\nstreet VARCHAR\ncity VARCHAR\ncountry VARCHAR}
+
+{users} -> "1:N" {orders}
+{users} -> "1:N" {addresses}
+{orders} -> "1:N" {order_items}
+{products} -> "1:N" {order_items}
+{categories} -> "1:N" {products}
