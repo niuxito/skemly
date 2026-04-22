@@ -26,10 +26,13 @@ WRONG: {c1 | Title | Desc} -> [Node]   RIGHT: {c1} -> [Node]
 
 ## Directives (top of file)
 - vibe: clean|handdrawn|cyberpunk  (default: clean)
-- layout: TD|LR|MM
+- layout: TD|LR|MM|TREE|ER
   - TD: ONE linear pipeline or decision tree — single top→bottom flow, no sibling groups
   - LR: **default for most diagrams** — use whenever there are 2+ groups; ELK places them side by side producing balanced, compact layouts
   - MM: topic + subtopics from a single root, outward arrows only
+  - TREE: strict top-down tree — one root, BFS level-by-level. Best for org charts, decision trees, hierarchies with no cross-edges
+  - ER: entity-relationship diagrams — use card nodes for entities; body supports \\n-separated attributes
+  - SEQ: sequence diagrams — actors as nodes, edges as time-ordered messages (top-to-bottom). Use edge labels for message names. Each actor appears as a column with a dashed lifeline.
 - spacing: N  edgeLabels: on|off
 
 ## Layout rules — follow strictly for visual quality

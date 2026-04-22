@@ -504,6 +504,22 @@ export function parseDSL(rawInput) {
     }
   }
 
+  // TREE layout: warn when the graph is not a strict tree (multiple parents or cycles)
+  if (directives.layout === 'TREE') {
+    const nodeList = [...nodes.values()]
+    const inDeg = {}
+    for (const n of nodeList) inDeg[n.id_key] = 0
+    for (const e of edges) inDeg[e.to] = (inDeg[e.to] || 0) + 1
+    const multiParent = nodeList.filter(n => inDeg[n.id_key] > 1)
+    if (multiParent.length > 0) {
+      diagnostics.push({
+        line: 0,
+        msg: `TREE layout expects a strict tree but node(s) "${multiParent.map(n => n.label).join('", "')}" have multiple parents. Use layout: TD or layout: LR for DAGs.`,
+        level: 'warn',
+      })
+    }
+  }
+
   return {
     nodes: [...nodes.values()],
     edges,

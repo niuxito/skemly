@@ -111,7 +111,7 @@ function readFileAsText(file) {
   })
 }
 
-export default function ChatPanel({ messages, chatHistory, onMessagesChange, onDslUpdate, currentDsl, remainingRequests, onRemainingChange }) {
+export default function ChatPanel({ messages, chatHistory, onMessagesChange, onDslUpdate, currentDsl, remainingRequests, onRemainingChange, prefillMessage }) {
   const t = useT()
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -128,6 +128,16 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Fill textarea when a tip action is sent from outside
+  const prevPrefill = useRef(null)
+  useEffect(() => {
+    if (prefillMessage && prefillMessage !== prevPrefill.current) {
+      prevPrefill.current = prefillMessage
+      setInput(prefillMessage)
+      textareaRef.current?.focus()
+    }
+  }, [prefillMessage])
 
   useEffect(() => {
     return () => recognitionRef.current?.stop()

@@ -11,11 +11,12 @@ import SessionBar from './components/SessionBar.jsx'
 import VibeBar from './components/VibeBar.jsx'
 import DiagnosticsPanel from './components/DiagnosticsPanel.jsx'
 import { Code2, MessageSquare, HelpCircle, Trash2, LayoutTemplate, Bot } from 'lucide-react'
+import DiagramTips from './components/DiagramTips.jsx'
 import { useT } from './lib/i18n.jsx'
 import { useAuth } from './features/auth/useAuth.js'
 import { useSessions } from './features/sessions/useSessions.js'
 import { useExport } from './hooks/useExport.js'
-import { rewriteNodeLabel, applyVibeChange } from './features/editor/dslHelpers.js'
+import { rewriteNodeLabel, applyVibeChange, rewriteEdgeLabel } from './features/editor/dslHelpers.js'
 import { createSession, deriveTitle } from './features/sessions/sessionHelpers.js'
 
 export default function App() {
@@ -51,6 +52,7 @@ export default function App() {
   // ─── UI state ─────────────────────────────────────────────────────────────
   const [shared, setShared] = useState(false)
   const [remainingRequests, setRemainingRequests] = useState(null)
+  const [tipPrefill, setTipPrefill] = useState(null)
   const [examplesOpen, setExamplesOpen] = useState(false)
   const [dslRefOpen, setDslRefOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('editor')
@@ -101,6 +103,10 @@ export default function App() {
     if (!node) return
     updateCurrentSession({ dsl: rewriteNodeLabel(dsl, idKey, node.label, newLabel) })
   }, [ast, dsl, updateCurrentSession])
+
+  const handleEdgeLabelChange = useCallback((fromLabel, fromId, toLabel, toId, oldLabel, newLabel) => {
+    updateCurrentSession({ dsl: rewriteEdgeLabel(dsl, fromLabel, fromId, toLabel, toId, oldLabel, newLabel) })
+  }, [dsl, updateCurrentSession])
 
   const handleVibeChange = useCallback((key) => {
     updateCurrentSession({ dsl: applyVibeChange(dsl, key) })
@@ -251,12 +257,13 @@ export default function App() {
           />
 
           <div className={`flex-1 overflow-hidden relative ${mobileView !== 'diagram' ? 'hidden' : ''}`}>
-            <DiagramRenderer ast={ast} elkLayout={elkLayout} svgRef={svgRef} canvasRef={canvasRef} onNodeLabelChange={handleNodeLabelChange} emptyHint={tFn('canvas_empty_hint')} />
+            <DiagramRenderer ast={ast} elkLayout={elkLayout} svgRef={svgRef} canvasRef={canvasRef} onNodeLabelChange={handleNodeLabelChange} onEdgeLabelChange={handleEdgeLabelChange} emptyHint={tFn('canvas_empty_hint')} />
+            <DiagramTips ast={ast} onSendToChat={text => { setTipPrefill(text + '​'); setMobileView('chat') }} />
             <VibeBar current={themeName} onChange={handleVibeChange} />
           </div>
 
           <div className={`flex flex-col flex-1 overflow-hidden ${mobileView !== 'chat' ? 'hidden' : ''}`}>
-            <ChatPanel messages={currentSession?.messages ?? []} chatHistory={currentSession?.chatHistory ?? []} onMessagesChange={handleMessagesChange} onDslUpdate={handleDslUpdate} currentDsl={dsl} remainingRequests={remainingRequests} onRemainingChange={setRemainingRequests} key={activeSessionId ?? sessions[0]?.id} />
+            <ChatPanel messages={currentSession?.messages ?? []} chatHistory={currentSession?.chatHistory ?? []} onMessagesChange={handleMessagesChange} onDslUpdate={handleDslUpdate} currentDsl={dsl} remainingRequests={remainingRequests} onRemainingChange={setRemainingRequests} prefillMessage={tipPrefill} key={activeSessionId ?? sessions[0]?.id} />
           </div>
 
           <div className={`flex flex-col flex-1 overflow-hidden ${mobileView !== 'dsl' ? 'hidden' : ''}`}>
@@ -318,12 +325,13 @@ export default function App() {
             </div>
 
             <div className={`flex flex-col flex-1 overflow-hidden ${activeTab === 'chat' ? '' : 'hidden'}`}>
-              <ChatPanel messages={currentSession?.messages ?? []} chatHistory={currentSession?.chatHistory ?? []} onMessagesChange={handleMessagesChange} onDslUpdate={handleDslUpdate} currentDsl={dsl} remainingRequests={remainingRequests} onRemainingChange={setRemainingRequests} key={activeSessionId ?? sessions[0]?.id} />
+              <ChatPanel messages={currentSession?.messages ?? []} chatHistory={currentSession?.chatHistory ?? []} onMessagesChange={handleMessagesChange} onDslUpdate={handleDslUpdate} currentDsl={dsl} remainingRequests={remainingRequests} onRemainingChange={setRemainingRequests} prefillMessage={tipPrefill} key={activeSessionId ?? sessions[0]?.id} />
             </div>
           </div>
 
           <div className="flex-1 relative overflow-hidden">
-            <DiagramRenderer ast={ast} elkLayout={elkLayout} svgRef={svgRef} canvasRef={canvasRef} onNodeLabelChange={handleNodeLabelChange} emptyHint={tFn('canvas_empty_hint')} />
+            <DiagramRenderer ast={ast} elkLayout={elkLayout} svgRef={svgRef} canvasRef={canvasRef} onNodeLabelChange={handleNodeLabelChange} onEdgeLabelChange={handleEdgeLabelChange} emptyHint={tFn('canvas_empty_hint')} />
+            <DiagramTips ast={ast} onSendToChat={text => setTipPrefill(text + '​')} />
             <VibeBar current={themeName} onChange={handleVibeChange} />
           </div>
         </div>

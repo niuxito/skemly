@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import ELK from 'elkjs/lib/elk.bundled.js'
 import { mindmapLayout } from './mindmapLayout.js'
+import { treeLayout } from './treeLayout.js'
+import { sequenceLayout } from './sequenceLayout.js'
 
 const elk = new ELK()
 
@@ -51,7 +53,9 @@ function estimateNodeSize(node, charW) {
     let bodyLines = [], bodyH = BODY_PADDING_V * 2
     if (node.body) {
       const maxBodyInnerW = CARD_MAX_WIDTH - PADDING_H * 2
-      bodyLines = wrapText(node.body, maxBodyInnerW, BODY_CHAR_W)
+      // Support \n as explicit row separator (used for ER entity attributes)
+      const rawRows = node.body.split(/\\n/)
+      bodyLines = rawRows.flatMap(row => wrapText(row.trim(), maxBodyInnerW, BODY_CHAR_W))
       bodyH = bodyLines.length * BODY_LINE_H + BODY_PADDING_V * 2
     }
 
@@ -83,14 +87,15 @@ function estimateNodeSize(node, charW) {
 }
 
 async function runLayout(ast) {
-  // Mindmap mode — custom layout, skip ELK
-  if (ast.directives?.layout === 'MM') {
-    return mindmapLayout(ast)
-  }
+  // Custom layout modes — skip ELK
+  if (ast.directives?.layout === 'MM')   return mindmapLayout(ast)
+  if (ast.directives?.layout === 'TREE') return treeLayout(ast)
+  if (ast.directives?.layout === 'SEQ')  return sequenceLayout(ast)
 
   const { nodes, edges, directives, groups = [] } = ast
   const spacing = directives?.spacing ?? 40
-  const direction = directives?.layout === 'LR' ? 'RIGHT' : 'DOWN'
+  const isER = directives?.layout === 'ER'
+  const direction = (directives?.layout === 'LR' || isER) ? 'RIGHT' : 'DOWN'
 
   const vibe = ast.directives?.vibe ?? 'clean'
   const charW = CHAR_WIDTH_BY_VIBE[vibe] ?? 7.5
@@ -143,9 +148,9 @@ async function runLayout(ast) {
         'elk.algorithm': 'layered',
         'elk.direction': direction,
         'elk.spacing.nodeNode': String(spacing),
-        'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing * 1.5),
-        'elk.spacing.edgeNode': String(Math.max(15, spacing / 2.5)),
-        'elk.spacing.edgeEdge': String(Math.max(5, spacing / 8)),
+        'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing * 2.5),
+        'elk.spacing.edgeNode': String(Math.max(20, spacing / 2)),
+        'elk.spacing.edgeEdge': String(Math.max(8, spacing / 6)),
         'elk.padding': '[top=20,left=20,right=20,bottom=20]',
         'elk.edgeRouting': 'ORTHOGONAL',
         'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
@@ -199,9 +204,9 @@ async function runLayout(ast) {
   const commonOpts = {
     'elk.algorithm': 'layered',
     'elk.spacing.nodeNode': String(spacing),
-    'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing * 1.5),
-    'elk.spacing.edgeNode': String(Math.max(15, spacing / 2.5)),
-    'elk.spacing.edgeEdge': String(Math.max(5, spacing / 8)),
+    'elk.layered.spacing.nodeNodeBetweenLayers': String(spacing * 2.5),
+    'elk.spacing.edgeNode': String(Math.max(20, spacing / 2)),
+    'elk.spacing.edgeEdge': String(Math.max(8, spacing / 6)),
     'elk.edgeRouting': 'ORTHOGONAL',
     'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
     'elk.layered.cycleBreaking.strategy': 'DEPTH_FIRST',

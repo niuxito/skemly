@@ -59,7 +59,8 @@ function nodeSize(n) {
 
     let bodyLines = [], bodyH = BODY_PAD_V * 2
     if (n.body) {
-      bodyLines = wrapBody(n.body, CARD_MAX_W - PAD_W)
+      const rawRows = n.body.split(/\\n/)
+      bodyLines = rawRows.flatMap(row => wrapBody(row.trim(), CARD_MAX_W - PAD_W))
       bodyH = bodyLines.length * BODY_LINE_H + BODY_PAD_V * 2
     }
 

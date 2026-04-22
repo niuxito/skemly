@@ -112,13 +112,22 @@ function NodeShape({ node, elkNode, theme, isEditing }) {
             {node.label}
           </text>
           {bodyLines.length > 0 && (
-            <text x={x + 12} y={y + headerH + CARD_BODY_PADDING}
-              textAnchor="start" dominantBaseline="hanging"
-              fontFamily={theme.font} fontSize={bodyFontSize} fill={textColor} fillOpacity={0.75}>
-              {bodyLines.map((line, i) => (
-                <tspan key={i} x={x + 12} dy={i === 0 ? 0 : CARD_BODY_LINE_H}>{line}</tspan>
-              ))}
-            </text>
+            <>
+              <text x={x + 12} y={y + headerH + CARD_BODY_PADDING}
+                textAnchor="start" dominantBaseline="hanging"
+                fontFamily={theme.font} fontSize={bodyFontSize} fill={textColor} fillOpacity={0.75}>
+                {bodyLines.map((line, i) => (
+                  <tspan key={i} x={x + 12} dy={i === 0 ? 0 : CARD_BODY_LINE_H}>{line}</tspan>
+                ))}
+              </text>
+              {/* Thin row separators for ER entity attribute lists */}
+              {bodyLines.length >= 3 && bodyLines.map((_, i) => {
+                if (i === 0) return null
+                const lineY = y + headerH + CARD_BODY_PADDING + i * CARD_BODY_LINE_H - 2
+                return <line key={i} x1={x + 4} y1={lineY} x2={x + w - 4} y2={lineY}
+                  stroke={textColor} strokeWidth={0.4} strokeOpacity={0.2} />
+              })}
+            </>
           )}
         </g>
       )
@@ -202,7 +211,7 @@ function buildRoundedPath(pts, r = 6) {
 }
 
 // ─── Edge ─────────────────────────────────────────────────────────────────────
-function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
+function EdgePath({ edge, elkEdge, directives, theme, isMindmap, isSelected, onSelect }) {
   if (!elkEdge?.sections?.length) return null
 
   const sec = elkEdge.sections[0]
@@ -285,8 +294,18 @@ function EdgePath({ edge, elkEdge, directives, theme, isMindmap }) {
 
   return (
     <g>
-      <path d={d} fill="none" stroke={stroke} strokeWidth={strokeW}
+      {/* Transparent wide hit area for click selection */}
+      {onSelect && (
+        <path d={d} fill="none" stroke="transparent" strokeWidth={14}
+          strokeLinecap="round"
+          style={{ cursor: 'pointer' }}
+          onClick={e => { e.stopPropagation(); onSelect() }} />
+      )}
+      <path d={d} fill="none"
+        stroke={isSelected ? '#3b82f6' : stroke}
+        strokeWidth={isSelected ? strokeW + 1 : strokeW}
         strokeLinecap="round"
+        strokeDasharray={isSelected ? '6 3' : undefined}
         markerEnd={arrowEnd}
         markerStart={arrowStart}
         filter={glowFilter}
@@ -395,8 +414,121 @@ function RoughOverlay({ ast, nodeMap, theme, totalW, totalH, canvasRef: external
 }
 
 
+// ─── Sequence diagram SVG ─────────────────────────────────────────────────────
+function SequenceSVG({ layout, theme, svgRef }) {
+  const { actors, lifelines, messages, width, height } = layout
+  const font  = theme.font
+  const fs    = theme.fontSize
+  const fsMsg = Math.max(fs - 2, 10)
+  const strokeColor = theme.nodeStroke
+  const fillColor   = theme.nodeFill
+  const textColor   = theme.nodeText
+  const edgeColor   = theme.edgeStroke
+
+  const ARROW_SIZE = 7
+  const SELF_OFFSET = 28
+
+  return (
+    <svg ref={svgRef} width={width} height={height}
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ display: 'block' }}>
+      <defs>
+        <marker id="seq-arrow" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+          <polygon points="0 0, 10 3.5, 0 7" fill={edgeColor} />
+        </marker>
+        <marker id="seq-arrow-start" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto-start-reverse">
+          <polygon points="0 0, 10 3.5, 0 7" fill={edgeColor} />
+        </marker>
+      </defs>
+
+      {/* Actor boxes */}
+      {actors.map(actor => (
+        <g key={actor.id}>
+          <rect x={actor.x} y={actor.y} width={actor.width} height={actor.height}
+            rx={4} fill={fillColor} stroke={strokeColor} strokeWidth={1.5} />
+          {actor.lines.map((line, i) => (
+            <text key={i} x={actor.x + actor.width / 2} y={actor.y + actor.height / 2 + i * 14 - (actor.lines.length - 1) * 7}
+              textAnchor="middle" dominantBaseline="middle"
+              fontFamily={font} fontSize={fs} fill={textColor} fontWeight="600"
+              style={{ userSelect: 'none' }}>
+              {line}
+            </text>
+          ))}
+        </g>
+      ))}
+
+      {/* Lifelines */}
+      {lifelines.map(ll => (
+        <line key={ll.id}
+          x1={ll.x} y1={ll.y1} x2={ll.x} y2={ll.y2}
+          stroke={strokeColor} strokeWidth={1} strokeDasharray="6 4" strokeOpacity={0.5} />
+      ))}
+
+      {/* Messages */}
+      {messages.map(msg => {
+        if (msg.isSelf && msg.selfLoop) {
+          const { loopX, y1, y2 } = msg.selfLoop
+          const midY = (y1 + y2) / 2
+          const d = `M${msg.x1},${y1} L${loopX},${y1} L${loopX},${y2} L${msg.x2},${y2}`
+          return (
+            <g key={msg.id}>
+              <path d={d} fill="none" stroke={edgeColor} strokeWidth={1.5}
+                markerEnd="url(#seq-arrow)" />
+              {msg.label && (
+                <text x={loopX + 4} y={midY} textAnchor="start" dominantBaseline="middle"
+                  fontFamily={font} fontSize={fsMsg} fill={textColor} style={{ userSelect: 'none' }}>
+                  {msg.label}
+                </text>
+              )}
+            </g>
+          )
+        }
+
+        const goRight = msg.x2 >= msg.x1
+        const arrowEnd   = 'url(#seq-arrow)'
+        const arrowStart = msg.isBidi ? 'url(#seq-arrow-start)' : undefined
+
+        const labelX = (msg.x1 + msg.x2) / 2
+        const labelY = msg.y - 8
+
+        return (
+          <g key={msg.id}>
+            <line
+              x1={msg.x1} y1={msg.y} x2={msg.x2} y2={msg.y}
+              stroke={edgeColor} strokeWidth={1.5}
+              markerEnd={arrowEnd} markerStart={arrowStart} />
+            {msg.label && (
+              <>
+                <rect
+                  x={labelX - msg.label.length * fsMsg * 0.3 - 4}
+                  y={labelY - fsMsg / 2 - 2}
+                  width={msg.label.length * fsMsg * 0.6 + 8}
+                  height={fsMsg + 4}
+                  rx={2}
+                  fill={fillColor} fillOpacity={0.85} />
+                <text x={labelX} y={labelY} textAnchor="middle" dominantBaseline="middle"
+                  fontFamily={font} fontSize={fsMsg} fill={textColor}
+                  style={{ userSelect: 'none' }}>
+                  {msg.label}
+                </text>
+              </>
+            )}
+            {/* Sequence number */}
+            <text x={goRight ? msg.x1 + 4 : msg.x1 - 4} y={msg.y + 12}
+              textAnchor={goRight ? 'start' : 'end'} dominantBaseline="middle"
+              fontFamily={font} fontSize={Math.max(fsMsg - 2, 8)} fill={textColor} fillOpacity={0.35}
+              style={{ userSelect: 'none' }}>
+              {messages.indexOf(msg) + 1}
+            </text>
+          </g>
+        )
+      })}
+    </svg>
+  )
+}
+
 // ─── Main DiagramRenderer ─────────────────────────────────────────────────────
-export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onNodeLabelChange, emptyHint }) {
+export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onNodeLabelChange, onEdgeLabelChange, emptyHint }) {
   const themeName = ast?.directives?.vibe ?? 'clean'
   const theme = THEMES[themeName] ?? THEMES.clean
   const containerRef = useRef(null)
@@ -416,6 +548,10 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
   // ─── Inline editing state ──────────────────────────────────────────────────
   const [editingNodeId, setEditingNodeId] = useState(null)
   const [editingValue, setEditingValue] = useState('')
+
+  // ─── Edge selection / label editing ───────────────────────────────────────
+  const [selectedEdgeIdx, setSelectedEdgeIdx] = useState(null)
+  const [edgeLabelDraft, setEdgeLabelDraft] = useState('')
 
   const commitEdit = useCallback(() => {
     const trimmed = editingValue.trim()
@@ -566,6 +702,8 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
   const onMouseDown = (e) => {
     if (e.button !== 0) return
     if (editingNodeId) return  // don't drag while editing
+    // Dismiss edge selection when clicking canvas background
+    if (selectedEdgeIdx !== null) setSelectedEdgeIdx(null)
     dragging.current = true
     lastMouse.current = { x: e.clientX, y: e.clientY }
   }
@@ -692,6 +830,26 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
       <div className="flex items-center justify-center h-full text-sm"
         style={{ background: theme.canvasBg, color: theme.nodeText, fontFamily: theme.font }}>
         {ast?.nodes?.length === 0 ? (emptyHint ?? 'Computing layout…') : 'Computing layout…'}
+      </div>
+    )
+  }
+
+  // ─── Sequence diagram — dedicated pan/zoom wrapper around SequenceSVG ─────
+  if (elkLayout.isSequence) {
+    return (
+      <div ref={containerRef}
+        className="relative w-full h-full overflow-hidden select-none"
+        style={{ background: theme.canvasBg, cursor: dragging.current ? 'grabbing' : 'grab', touchAction: 'none' }}
+        onMouseDown={onMouseDown} onMouseMove={onMouseMove}
+        onMouseUp={onMouseUp} onMouseLeave={onMouseUp} onWheel={onWheel}
+        onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        <div style={{
+          position: 'absolute',
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: '0 0',
+        }}>
+          <SequenceSVG layout={elkLayout} theme={theme} svgRef={svgRef} />
+        </div>
       </div>
     )
   }
@@ -984,7 +1142,12 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
             }
           }
           return <EdgePath key={i} edge={edge} elkEdge={elkEdge}
-            directives={ast.directives} theme={theme} isMindmap={!!elkLayout.isMindmap} />
+            directives={ast.directives} theme={theme} isMindmap={!!elkLayout.isMindmap}
+            isSelected={selectedEdgeIdx === i}
+            onSelect={onEdgeLabelChange ? () => {
+              setSelectedEdgeIdx(i)
+              setEdgeLabelDraft(edge.label ?? '')
+            } : undefined} />
         })}
 
         {/* Nodes (SVG shapes for clean/cyberpunk) */}
@@ -1049,14 +1212,22 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
                   {node.label}
                 </text>
                 {bodyLines.length > 0 && (
-                  <text x={x + 12} y={y + headerH + CARD_BODY_PADDING}
-                    textAnchor="start" dominantBaseline="hanging"
-                    fontFamily={theme.font} fontSize={bodyFontSize} fill={textColor} fillOpacity={0.75}
-                    visibility={textVis} style={{ userSelect: 'none', pointerEvents: 'none' }}>
-                    {bodyLines.map((line, i) => (
-                      <tspan key={i} x={x + 12} dy={i === 0 ? 0 : CARD_BODY_LINE_H}>{line}</tspan>
-                    ))}
-                  </text>
+                  <>
+                    <text x={x + 12} y={y + headerH + CARD_BODY_PADDING}
+                      textAnchor="start" dominantBaseline="hanging"
+                      fontFamily={theme.font} fontSize={bodyFontSize} fill={textColor} fillOpacity={0.75}
+                      visibility={textVis} style={{ userSelect: 'none', pointerEvents: 'none' }}>
+                      {bodyLines.map((line, i) => (
+                        <tspan key={i} x={x + 12} dy={i === 0 ? 0 : CARD_BODY_LINE_H}>{line}</tspan>
+                      ))}
+                    </text>
+                    {bodyLines.length >= 3 && bodyLines.map((_, i) => {
+                      if (i === 0) return null
+                      const lineY = y + headerH + CARD_BODY_PADDING + i * CARD_BODY_LINE_H - 2
+                      return <line key={i} x1={x + 4} y1={lineY} x2={x + w - 4} y2={lineY}
+                        stroke={textColor} strokeWidth={0.4} strokeOpacity={0.2} />
+                    })}
+                  </>
                 )}
               </g>
             )
@@ -1118,6 +1289,70 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
       </svg>
 
       {/* ─── Inline edit input overlay ──────────────────────────────────── */}
+      {/* Edge label editor — floating panel anchored to bottom-right of viewport */}
+      {selectedEdgeIdx !== null && onEdgeLabelChange && (() => {
+        const edge = ast.edges[selectedEdgeIdx]
+        if (!edge) return null
+        const fromNode = ast.nodes.find(n => n.id_key === edge.from)
+        const toNode   = ast.nodes.find(n => n.id_key === edge.to)
+        const commitEdgeLabel = () => {
+          onEdgeLabelChange(
+            fromNode?.label ?? edge.from, edge.from,
+            toNode?.label   ?? edge.to,   edge.to,
+            edge.label ?? null, edgeLabelDraft.trim() || null
+          )
+          setSelectedEdgeIdx(null)
+        }
+        return (
+          <div
+            style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 30, pointerEvents: 'all' }}
+            onMouseDown={e => e.stopPropagation()}
+          >
+            <div style={{
+              background: theme.nodeFill,
+              border: `1.5px solid #3b82f6`,
+              borderRadius: 8,
+              padding: '10px 12px',
+              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
+              display: 'flex', flexDirection: 'column', gap: 6,
+              minWidth: 220,
+              fontFamily: theme.font,
+            }}>
+              <div style={{ fontSize: 11, color: theme.nodeText, opacity: 0.6, marginBottom: 2 }}>
+                {fromNode?.label ?? edge.from} → {toNode?.label ?? edge.to}
+              </div>
+              <input
+                autoFocus
+                placeholder="Edge label (leave empty to remove)"
+                value={edgeLabelDraft}
+                onChange={e => setEdgeLabelDraft(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); commitEdgeLabel() }
+                  if (e.key === 'Escape') setSelectedEdgeIdx(null)
+                }}
+                style={{
+                  padding: '4px 8px', borderRadius: 4, fontSize: 13,
+                  border: `1px solid ${theme.nodeStroke}`,
+                  background: theme.bg ?? '#fff',
+                  color: theme.nodeText,
+                  outline: 'none',
+                }}
+              />
+              <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                <button onClick={() => setSelectedEdgeIdx(null)}
+                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, border: `1px solid ${theme.nodeStroke}`, background: 'transparent', cursor: 'pointer', color: theme.nodeText }}>
+                  Cancel
+                </button>
+                <button onClick={commitEdgeLabel}
+                  style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, border: 'none', background: '#3b82f6', color: '#fff', cursor: 'pointer' }}>
+                  Apply
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
       {editingNodeId && (() => {
         const elkNode = nodeMap[editingNodeId]
         if (!elkNode) return null
