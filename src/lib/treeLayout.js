@@ -144,7 +144,8 @@ export function treeLayout(ast) {
   const shift = (p) => ({ ...p, x: p.x - minX, y: p.y - minY })
   const shiftPt = ({ x, y }) => ({ x: x - minX, y: y - minY })
 
-  const children = Object.entries(positions).map(([id, pos]) => {
+  // Build absolute-positioned flat children first (shifted to positive coords)
+  const flatChildren = Object.entries(positions).map(([id, pos]) => {
     const sz = sizeMap[id]
     return {
       id,
@@ -155,6 +156,52 @@ export function treeLayout(ast) {
       ...(sz?.headerH   !== undefined ? { headerH:   sz.headerH   } : {}),
     }
   })
+
+  // Promote grouped nodes into compound ELK-style children so DiagramRenderer's
+  // buildFlatLayoutMap picks them up and renders GroupRect boxes correctly.
+  const groups = ast.groups ?? []
+  let children = flatChildren
+  if (groups.length > 0) {
+    const G_PAD_H = 20
+    const G_PAD_TOP = 36  // room for the group label
+    const G_PAD_BOT = 16
+
+    const nodeInGroup = {}
+    for (const g of groups) {
+      for (const id of (g.nodeIds || [])) nodeInGroup[id] = g.id
+    }
+
+    const ungrouped = flatChildren.filter(c => !nodeInGroup[c.id])
+
+    const groupCompound = groups.map(g => {
+      const members = flatChildren.filter(c => (g.nodeIds || []).includes(c.id))
+      if (!members.length) return null
+
+      const gMinX = Math.min(...members.map(c => c.x)) - G_PAD_H
+      const gMinY = Math.min(...members.map(c => c.y)) - G_PAD_TOP
+      const gMaxX = Math.max(...members.map(c => c.x + c.width))  + G_PAD_H
+      const gMaxY = Math.max(...members.map(c => c.y + c.height)) + G_PAD_BOT
+
+      // Children positions must be relative to the group origin
+      const relMembers = members.map(c => ({
+        ...c,
+        x: c.x - gMinX,
+        y: c.y - gMinY,
+      }))
+
+      return {
+        id: g.id,
+        x: gMinX,
+        y: gMinY,
+        width:  gMaxX - gMinX,
+        height: gMaxY - gMinY,
+        labels: [{ text: g.label }],
+        children: relMembers,
+      }
+    }).filter(Boolean)
+
+    children = [...ungrouped, ...groupCompound]
+  }
 
   // Straight vertical edges: bottom-center of parent → top-center of child
   const layoutEdges = edges.map((e, i) => {
