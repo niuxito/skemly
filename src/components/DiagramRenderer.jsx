@@ -664,6 +664,13 @@ export default function DiagramRenderer({ ast, elkLayout, svgRef, canvasRef, onN
         edgeMap[edge.id] = edge
       }
     }
+    // TREE layout: group boxes are pre-computed in absolute coords — inject
+    // directly into groupMap without touching nodeGroupId/LCA so tree edge
+    // sections (also absolute) never get double-translated.
+    for (const gb of layout.treeGroupBoxes ?? []) {
+      groupMap[gb.id] = { x: gb.x, y: gb.y, width: gb.width, height: gb.height }
+    }
+
     return { nodeMap, edgeMap, groupMap }
   }
 

@@ -144,8 +144,11 @@ export function treeLayout(ast) {
   const shift = (p) => ({ ...p, x: p.x - minX, y: p.y - minY })
   const shiftPt = ({ x, y }) => ({ x: x - minX, y: y - minY })
 
-  // Build absolute-positioned flat children first (shifted to positive coords)
-  const flatChildren = Object.entries(positions).map(([id, pos]) => {
+  // Flat children — absolute positions, no compound nesting.
+  // Keeping them flat ensures buildFlatLayoutMap never marks nodes as
+  // group-members, so LCA is always null and edge sections are never
+  // double-translated.
+  const children = Object.entries(positions).map(([id, pos]) => {
     const sz = sizeMap[id]
     return {
       id,
@@ -157,51 +160,31 @@ export function treeLayout(ast) {
     }
   })
 
-  // Promote grouped nodes into compound ELK-style children so DiagramRenderer's
-  // buildFlatLayoutMap picks them up and renders GroupRect boxes correctly.
+  // Compute group bounding boxes (absolute, after shift) and expose them as
+  // treeGroupBoxes so buildFlatLayoutMap can inject them directly into groupMap
+  // without affecting nodeGroupId / LCA logic.
   const groups = ast.groups ?? []
-  let children = flatChildren
-  if (groups.length > 0) {
-    const G_PAD_H = 20
-    const G_PAD_TOP = 36  // room for the group label
+  const treeGroupBoxes = groups.map(g => {
+    const members = (g.nodeIds || []).map(id => {
+      const pos = positions[id]
+      return pos ? shift(pos) : null
+    }).filter(Boolean)
+    if (!members.length) return null
+
+    const G_PAD_H   = 20
+    const G_PAD_TOP = 36
     const G_PAD_BOT = 16
 
-    const nodeInGroup = {}
-    for (const g of groups) {
-      for (const id of (g.nodeIds || [])) nodeInGroup[id] = g.id
+    return {
+      id:     g.id,
+      label:  g.label,
+      tag:    g.tag ?? null,
+      x:      Math.min(...members.map(p => p.x))            - G_PAD_H,
+      y:      Math.min(...members.map(p => p.y))            - G_PAD_TOP,
+      width:  Math.max(...members.map(p => p.x + p.width))  - Math.min(...members.map(p => p.x)) + G_PAD_H * 2,
+      height: Math.max(...members.map(p => p.y + p.height)) - Math.min(...members.map(p => p.y)) + G_PAD_TOP + G_PAD_BOT,
     }
-
-    const ungrouped = flatChildren.filter(c => !nodeInGroup[c.id])
-
-    const groupCompound = groups.map(g => {
-      const members = flatChildren.filter(c => (g.nodeIds || []).includes(c.id))
-      if (!members.length) return null
-
-      const gMinX = Math.min(...members.map(c => c.x)) - G_PAD_H
-      const gMinY = Math.min(...members.map(c => c.y)) - G_PAD_TOP
-      const gMaxX = Math.max(...members.map(c => c.x + c.width))  + G_PAD_H
-      const gMaxY = Math.max(...members.map(c => c.y + c.height)) + G_PAD_BOT
-
-      // Children positions must be relative to the group origin
-      const relMembers = members.map(c => ({
-        ...c,
-        x: c.x - gMinX,
-        y: c.y - gMinY,
-      }))
-
-      return {
-        id: g.id,
-        x: gMinX,
-        y: gMinY,
-        width:  gMaxX - gMinX,
-        height: gMaxY - gMinY,
-        labels: [{ text: g.label }],
-        children: relMembers,
-      }
-    }).filter(Boolean)
-
-    children = [...ungrouped, ...groupCompound]
-  }
+  }).filter(Boolean)
 
   // Straight vertical edges: bottom-center of parent → top-center of child
   const layoutEdges = edges.map((e, i) => {
@@ -244,5 +227,6 @@ export function treeLayout(ast) {
     height: maxY - minY,
     children,
     edges: layoutEdges,
+    treeGroupBoxes,
   }
 }
