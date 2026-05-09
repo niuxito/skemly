@@ -3,6 +3,8 @@
 .env.local
 .env.*.local
 .env.production
+*.key
+*.pem
 
 # Dependencies
 node_modules/

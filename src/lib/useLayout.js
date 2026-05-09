@@ -86,7 +86,7 @@ function estimateNodeSize(node, charW) {
   return { width: w, height: h, lines }
 }
 
-async function runLayout(ast) {
+export async function runLayout(ast) {
   // Custom layout modes — skip ELK
   if (ast.directives?.layout === 'MM')   return mindmapLayout(ast)
   if (ast.directives?.layout === 'TREE') return treeLayout(ast)
@@ -175,8 +175,8 @@ async function runLayout(ast) {
   //            the global top-level direction — no post-processing hacks needed.
   //
   // Phase C — compose: groups placed at Phase B positions, Phase A children attached
-  //            as sub-tree. All edge sections cleared → DiagramRenderer synthesizer
-  //            routes everything from correct absolute nodeMap positions.
+  //            as sub-tree. Reuse ELK sections whenever they exist so the renderer's
+  //            synthesizer remains a fallback instead of the primary router.
 
   // ── Group membership ──────────────────────────────────────────────────────
   function groupDepth(g) {
@@ -212,7 +212,7 @@ async function runLayout(ast) {
     'elk.layered.cycleBreaking.strategy': 'DEPTH_FIRST',
   }
 
-  // Resolve the top-level group ancestor for a node (used in Phase B deduplication)
+  // Resolve the top-level group ancestor for a node (used in Phase B meta edges)
   function topLevelGroupOf(nodeId) {
     let gId = nodeGroupMap[nodeId]
     if (!gId) return null
@@ -241,12 +241,13 @@ async function runLayout(ast) {
 
     // Intra-group edges only (both endpoints within this group's node set)
     const intraEdges = edges
-      .filter(e => allNodeIds.has(e.from) && allNodeIds.has(e.to))
-      .map((e, i) => ({
-        id: `pa_${g.id}_e${i}`,
-        sources: [e.from],
-        targets: [e.to],
-        labels: e.label && directives?.edgeLabels !== 'off' ? [{ text: e.label }] : [],
+      .map((e, i) => ({ edge: e, index: i }))
+      .filter(({ edge }) => allNodeIds.has(edge.from) && allNodeIds.has(edge.to))
+      .map(({ edge, index }) => ({
+        id: `e${index}`,
+        sources: [edge.from],
+        targets: [edge.to],
+        labels: edge.label && directives?.edgeLabels !== 'off' ? [{ text: edge.label }] : [],
       }))
 
     // Recursively build compound ELK nodes for nested sub-groups
@@ -313,17 +314,19 @@ async function runLayout(ast) {
     }),
   ]
 
-  // Deduplicated cross-entity edges (inter-group or group↔ungrouped)
-  const seenMeta = new Set()
+  // Cross-entity edges (inter-group or group↔ungrouped). Keep one meta edge per
+  // original edge so ELK can account for routing density and parallel links.
   const metaEdges = []
-  for (const e of edges) {
+  for (const [index, e] of edges.entries()) {
     const src = topLevelGroupOf(e.from) ?? e.from
     const tgt = topLevelGroupOf(e.to)   ?? e.to
     if (src === tgt) continue  // intra-group: handled in Phase A
-    const key = `${src}→${tgt}`
-    if (seenMeta.has(key)) continue
-    seenMeta.add(key)
-    metaEdges.push({ id: `mb_${key}`, sources: [src], targets: [tgt] })
+    metaEdges.push({
+      id: `e${index}`,
+      sources: [src],
+      targets: [tgt],
+      labels: e.label && directives?.edgeLabels !== 'off' ? [{ text: e.label }] : [],
+    })
   }
 
   const metaResult = await elk.layout({
@@ -341,7 +344,8 @@ async function runLayout(ast) {
   // Groups at Phase B position + Phase A internal layout as sub-tree.
   // Ungrouped nodes at Phase B position.
   // Intra-group edges: reuse Phase A ELK sections (translated to absolute coords).
-  // Cross-group edges: cleared → DiagramRenderer synthesizer routes from nodeMap.
+  // Cross-group edges: reuse Phase B ELK sections when available; otherwise fall
+  // back to the renderer synthesizer.
 
   const metaById = Object.fromEntries(
     (metaResult.children ?? []).map(c => [c.id, c])
@@ -351,18 +355,23 @@ async function runLayout(ast) {
   // DiagramRenderer's LCA logic already translates root-level edge sections by
   // the LCA group's absolute position, which is exactly (mc.x, mc.y). Translating
   // here too would double-offset every intra-group edge.
-  const phaseAEdgeSections = {}  // `${from}→${to}` → { sections, labels }
+  const phaseAEdgeSections = {}  // edgeId → { sections, labels }
   for (const g of topLevelGroups) {
     const pa = groupLayouts[g.id]
     for (const paEdge of (pa?.edges ?? [])) {
-      const from = paEdge.sources?.[0], to = paEdge.targets?.[0]
-      if (!from || !to || !paEdge.sections?.length) continue
-      phaseAEdgeSections[`${from}→${to}`] = {
+      if (!paEdge.id || !paEdge.sections?.length) continue
+      phaseAEdgeSections[paEdge.id] = {
         sections: paEdge.sections,
         labels:   paEdge.labels ?? [],
       }
     }
   }
+
+  const metaEdgeSections = Object.fromEntries(
+    (metaResult.edges ?? [])
+      .filter(edge => edge.id && edge.sections?.length)
+      .map(edge => [edge.id, { sections: edge.sections, labels: edge.labels ?? [] }])
+  )
 
   const composedChildren = [
     // Ungrouped nodes: Phase B provides absolute position and size
@@ -407,12 +416,16 @@ async function runLayout(ast) {
     const toGroup   = topLevelGroupOf(to)
     const isIntraGroup = fromGroup !== null && fromGroup === toGroup
     if (isIntraGroup) {
-      const phaseA = phaseAEdgeSections[`${from}→${to}`]
+      const phaseA = phaseAEdgeSections[e.id]
       if (phaseA?.sections?.length) {
         return { ...e, sections: phaseA.sections, labels: phaseA.labels }
       }
     }
-    // Cross-group or ungrouped: synthesizer routes from node bounds
+    const metaEdge = metaEdgeSections[e.id]
+    if (metaEdge?.sections?.length) {
+      return { ...e, sections: metaEdge.sections, labels: metaEdge.labels }
+    }
+    // Final fallback: synthesizer routes from node bounds
     return { ...e, sections: [] }
   })
 
