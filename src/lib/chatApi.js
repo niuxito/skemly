@@ -21,8 +21,8 @@ WRONG: {c1 | Title | Desc} -> [Node]   RIGHT: {c1} -> [Node]
 ## Tags & groups
 - Tags: #danger #safe #info #warning — e.g. [Node]#info
 - Groups: group "Title" #tag @layout=TD|LR { ... }  (nestable)
-  - @layout=TD: nodes inside flow top→down (default)
-  - @layout=LR: nodes inside flow left→right — use for horizontal rows of items within a group
+  - @layout is OPTIONAL. By default groups inherit the canvas direction (top-level layout:).
+  - Only add @layout to a group when its internal flow MUST differ from the canvas — e.g. an LR canvas with a 3-4 step sequential pipeline rendered as TD inside one group. Otherwise, omit it.
 
 ## Directives (top of file)
 - vibe: clean|handdrawn|cyberpunk  (default: clean)

@@ -229,7 +229,10 @@ export async function runLayout(ast) {
   const groupLayouts = {}  // groupId → elk.layout result (children relative to group origin)
 
   async function layoutTopLevelGroup(g) {
-    const dir = g.layoutDir === 'LR' ? 'RIGHT' : 'DOWN'
+    // Default: groups inherit the canvas direction. Only override if @layout was explicitly declared.
+    const dir = g.layoutDir === 'LR' ? 'RIGHT'
+              : g.layoutDir === 'TD' ? 'DOWN'
+              : direction
 
     // Collect all nodeIds in this group's subtree (direct + all nested groups)
     const allNodeIds = new Set()
@@ -258,7 +261,9 @@ export async function runLayout(ast) {
         id: sg.id,
         labels: [{ text: sg.label }],
         layoutOptions: {
-          'elk.direction': sg.layoutDir === 'LR' ? 'RIGHT' : 'DOWN',
+          'elk.direction': sg.layoutDir === 'LR' ? 'RIGHT'
+                         : sg.layoutDir === 'TD' ? 'DOWN'
+                         : direction,
           'elk.padding': '[top=40,left=20,right=20,bottom=20]',
         },
         children: [
