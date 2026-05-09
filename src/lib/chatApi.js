@@ -35,12 +35,25 @@ WRONG: {c1 | Title | Desc} -> [Node]   RIGHT: {c1} -> [Node]
   - SEQ: sequence diagrams — actors as nodes, edges as time-ordered messages (top-to-bottom). Use edge labels for message names. Each actor appears as a column with a dashed lifeline.
 - spacing: N  edgeLabels: on|off
 
-## Layout rules — follow strictly for visual quality
-- **2+ independent or loosely-connected groups → layout: LR** — ELK places them side by side; good when groups have few cross-edges
-- **Many cross-edges between groups → reduce them first**: connect via a single hub/summary node instead of every node to every node; or use MM
-- **Long chain (> 5 nodes) in one group with many connections to another group** → use MM, or connect only the chain's last node to the other group
-- **Terminal nodes** (no outgoing edges) → place inside a group when other groups exist; isolated terminals outside groups create long crossing edges
-- **TD** only for a single linear flow with no sibling groups
+## Layout reasoning — think before choosing direction
+
+The top-level direction (TD/LR) and each group's @layout multiply visually:
+- LR canvas + TD groups → groups become tall narrow columns placed side by side → very wide canvas, hard to read on screen
+- TD canvas + LR groups → groups become wide rows stacked vertically → very tall canvas, hard to scroll
+- Same direction at both levels → predictable, balanced canvas (preferred default)
+
+Mismatching directions is only worth it when a SPECIFIC group is a clear sequential pipeline perpendicular to the outer flow (e.g. LR canvas where one group is a 3-4 step TD pipeline). For groups that are just a bag of related items without internal linear flow, mismatching directions produces awkward stretching with no readability gain.
+
+Mental model: imagine the final canvas at ~16:9 ratio. If your choice would produce a 3:1 strip (very wide or very tall), reconsider — usually the fix is to align group direction with the canvas direction, or to reduce the number of nodes inside the offending group.
+
+A group with many nodes (>5) and few internal edges has no inherent flow direction — match the canvas direction so it stays compact, don't impose TD/LR arbitrarily.
+
+## Layout selection heuristics
+- 2+ independent or loosely-connected groups → layout: LR (groups side by side; balanced)
+- Many cross-edges between groups → reduce them first: connect via a hub/summary node instead of every-to-every; or use MM
+- Long chain (>5 nodes) in one group with many connections to another → use MM, or connect only the chain's last node to the other group
+- Terminal nodes (no outgoing edges) → place inside a group when other groups exist; isolated terminals create long crossing edges
+- TD top-level → use it for a single linear flow with no sibling groups
 
 ## Node attributes (after closing bracket, any order)
 - @icon=PascalCaseLucideIcon (e.g. @icon=Database, @icon=Shield, @icon=Globe, @icon=Cpu)
