@@ -51,7 +51,7 @@ export async function handleEnhancePrompt(req, res, deps) {
     return res.status(400).json({ error: { type: 'invalid_prompt', message: 'Invalid prompt length' } })
   }
 
-  if (detectInjection(userPrompt)) {
+  if (detectInjection(userPrompt).detected) {
     return res.status(200).json({ enhanced: userPrompt, skipped: 'injection_guard' })
   }
 
