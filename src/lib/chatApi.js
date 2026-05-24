@@ -143,11 +143,11 @@ export async function enhancePrompt(userPrompt, { lang = 'es', signal } = {}) {
   if (signal) signal.addEventListener('abort', () => ctrl.abort(), { once: true })
 
   try {
-    const res = await fetch('/api/enhance-prompt', {
+    const res = await fetch('/api/chat?op=enhance', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: ctrl.signal,
-      body: JSON.stringify({ userPrompt, lang }),
+      body: JSON.stringify({ op: 'enhance', userPrompt, lang }),
     })
     if (!res.ok) return null
     const data = await res.json().catch(() => null)

@@ -12,6 +12,7 @@ import {
   incrementRequestCountByUser,
   checkFileRateLimitByUser,
   incrementFileCountByUser,
+  checkEnhanceEligibility,
 } from './_rateLimit.js'
 import { buildAnthropicBody } from './_buildAnthropicBody.js'
 import { detectInjection } from './_promptGuard.js'
@@ -19,6 +20,7 @@ import { checkCsrf } from './_csrf.js'
 import { getUserFromRequest } from './_auth.js'
 import { resolveUserFeatures } from './_plans.js'
 import { neon } from '@neondatabase/serverless'
+import { handleEnhancePrompt } from './_enhancePrompt.js'
 
 const FILE_MAX_SIZE = parseInt(process.env.FILE_MAX_SIZE_ANON ?? String(2 * 1024 * 1024), 10)
 
@@ -50,6 +52,16 @@ export default async function handler(req, res) {
   }
 
   const ip = (req.headers['x-forwarded-for'] ?? '127.0.0.1').split(',')[0].trim()
+
+  // ─── Dispatch: prompt enhancer (shares CSRF + API key, distinct logic) ────
+  // Activated via ?op=enhance or body.op === 'enhance'. Folded into this
+  // handler to stay under Vercel Hobby's 12-function cap.
+  const opFromQuery = (() => {
+    try { return new URL(req.url, 'http://x').searchParams.get('op') } catch { return null }
+  })()
+  if (opFromQuery === 'enhance' || req.body?.op === 'enhance') {
+    return handleEnhancePrompt(req, res, { apiKey, ip, checkEnhanceEligibility, getUserFromRequest, resolveUserFeatures, detectInjection, neon })
+  }
 
   // ─── Auth + plan resolution ───────────────────────────────────────────────
   const jwtPayload = getUserFromRequest(req)
