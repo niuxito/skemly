@@ -161,9 +161,12 @@ export async function enhancePrompt(userPrompt, { lang = 'es', signal } = {}) {
   }
 }
 
-function shouldEnhance({ userMessage, isFirstShot, hasAttachment, autoEnhance }) {
+function shouldEnhance({ userMessage, hasAttachment, autoEnhance }) {
+  // The enhancer adds value whenever the prompt is a vague natural-language
+  // request. We deliberately don't gate on isFirstShot because users often
+  // type a fresh generative prompt on top of an existing diagram, and that
+  // is exactly the case where refinement pays off.
   if (!autoEnhance) return false
-  if (!isFirstShot) return false
   if (hasAttachment) return false
   if (typeof userMessage !== 'string') return false
   if (userMessage.length < ENHANCE_MIN_LEN) return false
@@ -172,7 +175,7 @@ function shouldEnhance({ userMessage, isFirstShot, hasAttachment, autoEnhance })
 }
 
 export async function callClaude(userMessage, chatHistory, currentDsl, attachment = null, options = {}) {
-  const { autoEnhance = false, lang = 'es' } = options
+  const { autoEnhance = false, lang = 'es', onPhase = null } = options
 
   // ── Client-side injection guard (immediate, no network call) ───────────────
   if (detectInjection(userMessage)) {
@@ -188,10 +191,12 @@ export async function callClaude(userMessage, chatHistory, currentDsl, attachmen
   // Optionally enhance the prompt before sending to /api/chat.
   // Pure best-effort: any failure falls back to the original userMessage.
   let enhancedPrompt = null
-  if (shouldEnhance({ userMessage, isFirstShot, hasAttachment: !!attachment, autoEnhance })) {
+  if (shouldEnhance({ userMessage, hasAttachment: !!attachment, autoEnhance })) {
+    onPhase?.('enhancing')
     const enhanced = await enhancePrompt(userMessage, { lang })
     if (enhanced && enhanced !== userMessage) enhancedPrompt = enhanced
   }
+  onPhase?.('generating')
 
   const effectivePrompt = enhancedPrompt ?? userMessage
 

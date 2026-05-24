@@ -161,6 +161,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
   const [attachError, setAttachError] = useState(null)
   const [isListening, setIsListening] = useState(false)
   const [autoEnhance, setAutoEnhance] = useState(readAutoEnhancePref)
+  const [phase, setPhase] = useState(null)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
@@ -290,7 +291,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
         chatHistory,
         currentDsl,
         currentAttachment,
-        { autoEnhance, lang },
+        { autoEnhance, lang, onPhase: setPhase },
       )
       const isDsl = looksLikeDsl(result)
 
@@ -328,6 +329,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
       )
     } finally {
       setLoading(false)
+      setPhase(null)
     }
   }, [input, loading, messages, chatHistory, currentDsl, attachment, onDslUpdate, onMessagesChange, autoEnhance, lang, onRemainingChange])
 
@@ -342,7 +344,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
         chatHistory,
         currentDsl,
         retryAttachment ?? null,
-        { autoEnhance, lang },
+        { autoEnhance, lang, onPhase: setPhase },
       )
       const isDsl = looksLikeDsl(result)
       const assistantMsg = { id: Date.now(), role: 'assistant', content: result, isDsl }
@@ -366,8 +368,9 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
       )
     } finally {
       setLoading(false)
+      setPhase(null)
     }
-  }, [loading, messages, chatHistory, currentDsl, onDslUpdate, onMessagesChange, onRemainingChange, t])
+  }, [loading, messages, chatHistory, currentDsl, onDslUpdate, onMessagesChange, onRemainingChange, autoEnhance, lang, t])
 
   const handleKeyDown = useCallback((e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -393,8 +396,11 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
         {loading && (
           <div className="flex gap-2 items-center">
             <Bot size={16} className="shrink-0 text-slate-500" />
-            <div className="rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-900">
-              <span className="animate-pulse">{t('chat_thinking')}</span>
+            <div className="rounded-lg px-3 py-2 text-sm bg-slate-100 text-slate-900 flex items-center gap-1.5">
+              {phase === 'enhancing' && <Sparkles size={11} className="text-violet-500 animate-pulse" />}
+              <span className="animate-pulse">
+                {phase === 'enhancing' ? t('chat_refining') : t('chat_thinking')}
+              </span>
             </div>
           </div>
         )}

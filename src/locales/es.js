@@ -55,6 +55,7 @@ export default {
   chat_empty_title: 'Describe el diagrama que quieres crear.',
   chat_empty_hint: 'p.ej. "Crea un diagrama de arquitectura con un load balancer y dos servidores"',
   chat_thinking: 'Pensando…',
+  chat_refining: 'Refinando petición…',
   chat_retry: 'Reintentar',
   chat_reapply: 'Re-aplicar',
   chat_placeholder: 'Describe un diagrama… (Enter para enviar, Shift+Enter para nueva línea)',

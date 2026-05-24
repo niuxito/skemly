@@ -53,6 +53,13 @@ export default function App() {
   const [shared, setShared] = useState(false)
   const [remainingRequests, setRemainingRequests] = useState(null)
   const [tipPrefill, setTipPrefill] = useState(null)
+
+  // Clear any pending tip prefill when the user switches to a different
+  // diagram session — otherwise the new ChatPanel mounts and inherits
+  // the stale suggestion from the previous diagram.
+  useEffect(() => {
+    setTipPrefill(null)
+  }, [activeSessionId])
   const [examplesOpen, setExamplesOpen] = useState(false)
   const [dslRefOpen, setDslRefOpen] = useState(false)
   const [activeTab, setActiveTab] = useState('editor')
