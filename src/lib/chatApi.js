@@ -130,7 +130,50 @@ async function callAnthropicProxy(body) {
   })
 }
 
-export async function callClaude(userMessage, chatHistory, currentDsl, attachment = null) {
+// ── Prompt enhancer ──────────────────────────────────────────────────────────
+// Calls /api/enhance-prompt with a strict timeout and falls back to the
+// original prompt on any error/timeout. Returns null when the enhancement
+// should be skipped (e.g. DSL-like input, attachment present, too short).
+const ENHANCE_TIMEOUT_MS = 5000
+const ENHANCE_MIN_LEN = 15
+
+export async function enhancePrompt(userPrompt, { lang = 'es', signal } = {}) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), ENHANCE_TIMEOUT_MS)
+  if (signal) signal.addEventListener('abort', () => ctrl.abort(), { once: true })
+
+  try {
+    const res = await fetch('/api/enhance-prompt', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: ctrl.signal,
+      body: JSON.stringify({ userPrompt, lang }),
+    })
+    if (!res.ok) return null
+    const data = await res.json().catch(() => null)
+    const enhanced = data?.enhanced
+    if (typeof enhanced !== 'string' || enhanced.length < ENHANCE_MIN_LEN) return null
+    return enhanced
+  } catch {
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+function shouldEnhance({ userMessage, isFirstShot, hasAttachment, autoEnhance }) {
+  if (!autoEnhance) return false
+  if (!isFirstShot) return false
+  if (hasAttachment) return false
+  if (typeof userMessage !== 'string') return false
+  if (userMessage.length < ENHANCE_MIN_LEN) return false
+  if (looksLikeDsl(userMessage)) return false
+  return true
+}
+
+export async function callClaude(userMessage, chatHistory, currentDsl, attachment = null, options = {}) {
+  const { autoEnhance = false, lang = 'es' } = options
+
   // ── Client-side injection guard (immediate, no network call) ───────────────
   if (detectInjection(userMessage)) {
     throw new Error('El mensaje contiene instrucciones que intentan modificar el comportamiento del asistente. Por favor, reformula tu petición.')
@@ -140,10 +183,20 @@ export async function callClaude(userMessage, chatHistory, currentDsl, attachmen
     ? `Current diagram DSL:\n\`\`\`\n${currentDsl}\n\`\`\`\n\n`
     : ''
 
-  // Wrap user content to clearly delimit untrusted input for the model
-  const augmentedMessage = `${contextBlock}<user_request>\n${userMessage}\n</user_request>`
-
   const isFirstShot = chatHistory.length === 0 && !currentDsl
+
+  // Optionally enhance the prompt before sending to /api/chat.
+  // Pure best-effort: any failure falls back to the original userMessage.
+  let enhancedPrompt = null
+  if (shouldEnhance({ userMessage, isFirstShot, hasAttachment: !!attachment, autoEnhance })) {
+    const enhanced = await enhancePrompt(userMessage, { lang })
+    if (enhanced && enhanced !== userMessage) enhancedPrompt = enhanced
+  }
+
+  const effectivePrompt = enhancedPrompt ?? userMessage
+
+  // Wrap user content to clearly delimit untrusted input for the model
+  const augmentedMessage = `${contextBlock}<user_request>\n${effectivePrompt}\n</user_request>`
 
   const messages = [
     ...chatHistory.slice(-5),
@@ -237,5 +290,5 @@ export async function callClaude(userMessage, chatHistory, currentDsl, attachmen
     }
   }
 
-  return { dsl, remaining }
+  return { dsl, remaining, enhancedPrompt }
 }

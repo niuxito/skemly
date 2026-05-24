@@ -1,7 +1,21 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { callClaude, looksLikeDsl } from '../lib/chatApi.js'
-import { Send, RotateCcw, AlertCircle, Bot, User, Paperclip, X, FileText, Image, Mic } from 'lucide-react'
-import { useT } from '../lib/i18n.jsx'
+import { Send, RotateCcw, AlertCircle, Bot, User, Paperclip, X, FileText, Image, Mic, Sparkles, ChevronDown } from 'lucide-react'
+import { useT, useI18n } from '../lib/i18n.jsx'
+
+const AUTO_ENHANCE_KEY = 'skemly.prefs.autoEnhance'
+
+function readAutoEnhancePref() {
+  if (typeof window === 'undefined') return true
+  const stored = window.localStorage?.getItem(AUTO_ENHANCE_KEY)
+  if (stored === null || stored === undefined) return true
+  return stored === '1'
+}
+
+function writeAutoEnhancePref(enabled) {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.setItem(AUTO_ENHANCE_KEY, enabled ? '1' : '0') } catch { /* ignore */ }
+}
 
 const FILE_MAX_SIZE = 2 * 1024 * 1024 // 2 MB — must match server default
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif,application/pdf,text/plain,text/markdown,application/json'
@@ -27,14 +41,41 @@ function AttachmentPill({ name, mediaType, onRemove }) {
 
 function MessageBubble({ msg, onReapply, onRetry }) {
   const t = useT()
+  const [enhancedOpen, setEnhancedOpen] = useState(false)
+
   if (msg.role === 'user') {
+    const hasEnhanced = typeof msg.enhancedPrompt === 'string' && msg.enhancedPrompt !== msg.content
     return (
       <div className="flex justify-end gap-2 items-start">
-        <div className="max-w-[85%] rounded-lg px-3 py-2 text-sm space-y-1.5 bg-slate-800 text-white">
-          {msg.attachment && (
-            <AttachmentPill name={msg.attachment.name} mediaType={msg.attachment.mediaType} />
+        <div className="max-w-[85%] space-y-1.5">
+          <div className="rounded-lg px-3 py-2 text-sm space-y-1.5 bg-slate-800 text-white">
+            {msg.attachment && (
+              <AttachmentPill name={msg.attachment.name} mediaType={msg.attachment.mediaType} />
+            )}
+            <p className="whitespace-pre-wrap">{msg.content}</p>
+          </div>
+          {hasEnhanced && (
+            <div className="rounded-lg border border-slate-200 bg-white text-slate-700 text-xs overflow-hidden">
+              <button
+                onClick={() => setEnhancedOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 hover:bg-slate-50 transition-colors"
+              >
+                <span className="flex items-center gap-1.5">
+                  <Sparkles size={11} className="text-violet-500" />
+                  <span className="font-medium">{t('chat_enhanced_label')}</span>
+                </span>
+                <ChevronDown
+                  size={12}
+                  className={`text-slate-400 transition-transform ${enhancedOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+              {enhancedOpen && (
+                <div className="px-2.5 py-2 border-t border-slate-100 whitespace-pre-wrap text-slate-600">
+                  {msg.enhancedPrompt}
+                </div>
+              )}
+            </div>
           )}
-          <p className="whitespace-pre-wrap">{msg.content}</p>
         </div>
         <User size={16} className="mt-1 shrink-0 text-slate-500" />
       </div>
@@ -113,15 +154,25 @@ function readFileAsText(file) {
 
 export default function ChatPanel({ messages, chatHistory, onMessagesChange, onDslUpdate, currentDsl, remainingRequests, onRemainingChange, prefillMessage }) {
   const t = useT()
+  const { lang } = useI18n()
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [attachment, setAttachment] = useState(null)
   const [attachError, setAttachError] = useState(null)
   const [isListening, setIsListening] = useState(false)
+  const [autoEnhance, setAutoEnhance] = useState(readAutoEnhancePref)
   const bottomRef = useRef(null)
   const textareaRef = useRef(null)
   const fileInputRef = useRef(null)
   const recognitionRef = useRef(null)
+
+  const toggleAutoEnhance = useCallback(() => {
+    setAutoEnhance(prev => {
+      const next = !prev
+      writeAutoEnhancePref(next)
+      return next
+    })
+  }, [])
 
   const hasSpeechAPI = !!(window.SpeechRecognition || window.webkitSpeechRecognition)
 
@@ -234,8 +285,18 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
     setLoading(true)
 
     try {
-      const { dsl: result, remaining } = await callClaude(text, chatHistory, currentDsl, currentAttachment)
+      const { dsl: result, remaining, enhancedPrompt } = await callClaude(
+        text,
+        chatHistory,
+        currentDsl,
+        currentAttachment,
+        { autoEnhance, lang },
+      )
       const isDsl = looksLikeDsl(result)
+
+      const userMsgWithEnhancement = enhancedPrompt
+        ? newMessages.map(m => m.id === userMsg.id ? { ...m, enhancedPrompt } : m)
+        : newMessages
 
       const assistantMsg = {
         id: Date.now() + 1,
@@ -248,7 +309,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
         { role: 'user', content: text },
         { role: 'assistant', content: result },
       ]
-      onMessagesChange([...newMessages, assistantMsg], newHistory)
+      onMessagesChange([...userMsgWithEnhancement, assistantMsg], newHistory)
 
       if (remaining !== null) onRemainingChange?.(remaining)
       if (isDsl) {
@@ -268,7 +329,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
     } finally {
       setLoading(false)
     }
-  }, [input, loading, messages, chatHistory, currentDsl, attachment, onDslUpdate, onMessagesChange])
+  }, [input, loading, messages, chatHistory, currentDsl, attachment, onDslUpdate, onMessagesChange, autoEnhance, lang, onRemainingChange])
 
   const handleRetry = useCallback(async (retryText, errorMsgId, retryAttachment) => {
     if (loading) return
@@ -276,7 +337,13 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
     onMessagesChange(messagesWithoutError, chatHistory)
     setLoading(true)
     try {
-      const { dsl: result, remaining } = await callClaude(retryText, chatHistory, currentDsl, retryAttachment ?? null)
+      const { dsl: result, remaining, enhancedPrompt } = await callClaude(
+        retryText,
+        chatHistory,
+        currentDsl,
+        retryAttachment ?? null,
+        { autoEnhance, lang },
+      )
       const isDsl = looksLikeDsl(result)
       const assistantMsg = { id: Date.now(), role: 'assistant', content: result, isDsl }
       const newHistory = [
@@ -284,6 +351,8 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
         { role: 'user', content: retryText },
         { role: 'assistant', content: result },
       ]
+      // Retry doesn't re-render the user message bubble, so we discard enhancedPrompt for now.
+      void enhancedPrompt
       onMessagesChange([...messagesWithoutError, assistantMsg], newHistory)
       if (remaining !== null) onRemainingChange?.(remaining)
       if (isDsl) onDslUpdate(result)
@@ -387,6 +456,16 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
               <Mic size={14} />
             </button>
           )}
+          <button
+            onClick={toggleAutoEnhance}
+            disabled={loading}
+            title={autoEnhance ? t('chat_enhance_on_tooltip') : t('chat_enhance_off_tooltip')}
+            className={`shrink-0 p-2 rounded transition-colors disabled:opacity-30 ${
+              autoEnhance ? 'text-violet-500 bg-violet-50 hover:bg-violet-100' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
+            }`}
+          >
+            <Sparkles size={14} />
+          </button>
           <button
             onClick={handleSend}
             disabled={loading || !input.trim()}

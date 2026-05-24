@@ -362,6 +362,49 @@ export async function checkFileRateLimitByUser({ userId, ip, databaseUrl, dailyF
 }
 
 /**
+ * Read-only eligibility check for the prompt enhancer.
+ * Gates /api/enhance-prompt behind the user's daily chat budget:
+ * if the user has already used up `dailyLimit` chat requests, they
+ * cannot enhance either. Does NOT increment any counter — the
+ * follow-up /api/chat call increments as normal.
+ *
+ * Bounds enhance abuse to the same per-day cap as chat without
+ * requiring a separate column.
+ *
+ * Returns: { allowed: boolean, count: number, limit: number|null }
+ */
+export async function checkEnhanceEligibility({ userId, ip, databaseUrl, dailyLimit }) {
+  if (dailyLimit === null || dailyLimit === undefined) return { allowed: true, count: 0, limit: null }
+  if (!databaseUrl) return { allowed: true, count: 0, limit: null }
+
+  try {
+    const sql = neon(databaseUrl)
+    const today = new Date().toISOString().slice(0, 10)
+
+    let count
+    if (userId) {
+      const rows = await sql`
+        SELECT request_count FROM rate_limits
+        WHERE user_id = ${userId} AND window_date = ${today}
+      `
+      count = rows[0]?.request_count ?? 0
+    } else {
+      const rows = await sql`
+        SELECT request_count FROM rate_limits
+        WHERE ip_address = ${ip} AND window_date = ${today} AND user_id IS NULL
+      `
+      count = rows[0]?.request_count ?? 0
+    }
+
+    if (count >= dailyLimit) return { allowed: false, count, limit: dailyLimit }
+    return { allowed: true, count, limit: dailyLimit }
+  } catch (err) {
+    console.error('[enhance-eligibility] Check failed:', err.message)
+    return { allowed: true, count: 0, limit: dailyLimit }
+  }
+}
+
+/**
  * Increments the file upload count for an authenticated user or anonymous IP.
  * Call only after the upstream request succeeds.
  */
