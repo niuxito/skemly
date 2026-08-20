@@ -160,6 +160,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
   const [attachment, setAttachment] = useState(null)
   const [attachError, setAttachError] = useState(null)
   const [isListening, setIsListening] = useState(false)
+  const [micError, setMicError] = useState(null)
   const [autoEnhance, setAutoEnhance] = useState(readAutoEnhancePref)
   const [phase, setPhase] = useState(null)
   const bottomRef = useRef(null)
@@ -175,7 +176,10 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
     })
   }, [])
 
-  const hasSpeechAPI = !!(window.SpeechRecognition || window.webkitSpeechRecognition)
+  const SpeechRecognitionCtor = typeof window !== 'undefined'
+    ? window.SpeechRecognition || window.webkitSpeechRecognition || null
+    : null
+  const hasSpeechAPI = !!SpeechRecognitionCtor
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -196,23 +200,56 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
   }, [])
 
   const toggleMic = useCallback(() => {
-    const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition
-    if (!SpeechRec) return
+    const SpeechRec = typeof window !== 'undefined'
+      ? window.SpeechRecognition || window.webkitSpeechRecognition || null
+      : null
+    if (!SpeechRec) {
+      setMicError(t('chat_mic_unsupported'))
+      return
+    }
+
+    if (typeof window !== 'undefined' && !window.isSecureContext) {
+      setMicError(t('chat_mic_secure_context'))
+      return
+    }
 
     if (isListening) {
       recognitionRef.current?.stop()
       return
     }
 
-    const recognition = new SpeechRec()
+    setMicError(null)
+
+    let recognition
+    try {
+      recognition = new SpeechRec()
+    } catch {
+      setMicError(t('chat_mic_error'))
+      return
+    }
+
     recognition.continuous = false
     recognition.interimResults = true
-    recognition.lang = navigator.language
+    recognition.maxAlternatives = 1
+    recognition.lang = navigator.language || 'es-ES'
     recognitionRef.current = recognition
 
-    recognition.onstart = () => setIsListening(true)
-    recognition.onend = () => setIsListening(false)
-    recognition.onerror = () => setIsListening(false)
+    recognition.onstart = () => {
+      setIsListening(true)
+    }
+    recognition.onend = () => {
+      setIsListening(false)
+      recognitionRef.current = null
+    }
+    recognition.onerror = (event) => {
+      setIsListening(false)
+      recognitionRef.current = null
+      setMicError(
+        event?.error === 'not-allowed'
+          ? t('chat_mic_not_allowed')
+          : t('chat_mic_error')
+      )
+    }
 
     recognition.onresult = (e) => {
       let finalText = ''
@@ -227,8 +264,14 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
       }
     }
 
-    recognition.start()
-  }, [isListening])
+    try {
+      recognition.start()
+    } catch {
+      setIsListening(false)
+      recognitionRef.current = null
+      setMicError(t('chat_mic_error'))
+    }
+  }, [isListening, t])
 
   const handleReapply = useCallback((dsl) => {
     onDslUpdate(dsl)
@@ -431,6 +474,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
             onChange={handleFileChange}
           />
           <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={loading || !!attachment}
             title={t('chat_attach_tooltip')}
@@ -452,9 +496,11 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
           />
           {hasSpeechAPI && (
             <button
+              type="button"
               onClick={toggleMic}
               disabled={loading}
               title={isListening ? t('chat_mic_stop') : t('chat_mic_start')}
+              aria-pressed={isListening}
               className={`shrink-0 p-2 rounded transition-colors disabled:opacity-30 ${
                 isListening ? 'text-red-500 animate-pulse' : 'text-slate-400 hover:text-slate-600 hover:bg-slate-100'
               }`}
@@ -463,6 +509,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
             </button>
           )}
           <button
+            type="button"
             onClick={toggleAutoEnhance}
             disabled={loading}
             title={autoEnhance ? t('chat_enhance_on_tooltip') : t('chat_enhance_off_tooltip')}
@@ -473,6 +520,7 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
             <Sparkles size={14} />
           </button>
           <button
+            type="button"
             onClick={handleSend}
             disabled={loading || !input.trim()}
             className="shrink-0 p-2 rounded transition-colors bg-slate-800 text-white hover:bg-slate-700 disabled:bg-slate-300"
@@ -480,6 +528,12 @@ export default function ChatPanel({ messages, chatHistory, onMessagesChange, onD
             <Send size={14} />
           </button>
         </div>
+        {isListening && (
+          <p className="text-xs mt-1 text-slate-500">{t('chat_mic_listening')}</p>
+        )}
+        {micError && (
+          <p className="text-xs mt-1 text-red-500">{micError}</p>
+        )}
         {remainingRequests !== null && (
           <p className="text-center text-xs mt-1 text-slate-500 opacity-60">
             {t('chat_requests_remaining', remainingRequests)}
