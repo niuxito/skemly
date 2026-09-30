@@ -1,6 +1,7 @@
 import { neon } from '@neondatabase/serverless'
 import { getUserFromRequest } from './_auth.js'
 import { checkCsrf } from './_csrf.js'
+import { effectivePlan } from './_billing.js'
 
 /**
  * Strip base64 attachment data from messages before storing in DB.
@@ -33,7 +34,7 @@ export default async function handler(req, res) {
 
   // Look up plan from DB — JWT does not carry plan to avoid stale data
   const planRows = await sql`SELECT plan FROM users WHERE id = ${user.sub}`
-  const userPlan = planRows[0]?.plan ?? 'free'
+  const userPlan = effectivePlan(planRows[0]?.plan)
   if (!PAID_PLANS.includes(userPlan)) {
     return res.status(403).json({ error: 'Plan upgrade required' })
   }

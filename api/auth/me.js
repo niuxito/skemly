@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import { getUserFromRequest } from '../_auth.js'
+import { effectivePlan } from '../_billing.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -42,6 +43,6 @@ export default async function handler(req, res) {
 
   const user = rows[0]
   return res.status(200).json({
-    user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified, plan: user.plan, plan_expires_at: user.plan_expires_at, is_admin: user.is_admin ?? false },
+    user: { id: user.id, email: user.email, name: user.name, email_verified: user.email_verified, plan: effectivePlan(user.plan), plan_expires_at: user.plan_expires_at, is_admin: user.is_admin ?? false },
   })
 }

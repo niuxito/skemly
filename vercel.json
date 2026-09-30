@@ -5,6 +5,7 @@
     { "source": "/api/admin/:path*", "destination": "/api/admin" },
     { "source": "/api/stripe/checkout", "destination": "/api/stripe" },
     { "source": "/api/stripe/portal", "destination": "/api/stripe" },
+    { "source": "/api/stripe/status", "destination": "/api/stripe" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

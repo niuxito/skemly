@@ -19,6 +19,7 @@ import { detectInjection } from './_promptGuard.js'
 import { checkCsrf } from './_csrf.js'
 import { getUserFromRequest } from './_auth.js'
 import { resolveUserFeatures } from './_plans.js'
+import { isBillingEnabled, effectivePlan } from './_billing.js'
 import { neon } from '@neondatabase/serverless'
 import { handleEnhancePrompt } from './_enhancePrompt.js'
 
@@ -35,6 +36,7 @@ function nextMidnightUTC() {
 }
 
 function upgradeTo(plan) {
+  if (!isBillingEnabled()) return null
   if (plan === 'free') return 'starter'
   if (plan === 'starter') return 'pro'
   return null
@@ -74,7 +76,7 @@ export default async function handler(req, res) {
     try {
       const sql = neon(process.env.DATABASE_URL)
       const rows = await sql`SELECT plan FROM users WHERE id = ${userId}`
-      userPlan = rows[0]?.plan ?? 'free'
+      userPlan = effectivePlan(rows[0]?.plan)
     } catch (err) {
       console.error('[chat] plan lookup error:', err.message)
     }

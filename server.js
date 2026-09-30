@@ -16,6 +16,10 @@ const DIST = resolve(join(__dirname, 'dist'))
 const BODY_LIMIT = 1 * 1024 * 1024 // 1 MB
 const PORT = process.env.PORT ?? 3000
 const API_KEY = process.env.ANTHROPIC_API_KEY ?? ''
+if (!API_KEY) {
+  console.error('ANTHROPIC_API_KEY is required. Set it in the environment (see README).')
+  process.exit(1)
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -146,5 +150,4 @@ createServer(async (req, res) => {
   }
 }).listen(PORT, () => {
   console.log(`Skemly server running at http://localhost:${PORT}`)
-  if (!API_KEY) console.warn('  WARNING: ANTHROPIC_API_KEY is not set — AI Chat will return errors')
 })

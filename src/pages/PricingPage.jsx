@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Check, X, Zap, ArrowLeft } from 'lucide-react'
 import { useAuth } from '../features/auth/useAuth.js'
 import AuthModal from '../components/AuthModal.jsx'
+import { useBillingEnabled } from '../hooks/useBillingEnabled.js'
 
 const PLANS = [
   {
@@ -52,6 +53,12 @@ export default function PricingPage() {
   const { user, authOpen, setAuthOpen, authDefaultTab, authDefaultEmail, handleAuthSuccess, handleVerifySuccess, openAuthModal } = useAuth()
   const [loading, setLoading] = useState(null) // key of plan being purchased
   const [banner, setBanner] = useState(null)   // { type: 'success' | 'canceled', message }
+  const billingEnabled = useBillingEnabled()
+
+  // No plans on instances without Stripe
+  useEffect(() => {
+    if (billingEnabled === false) window.location.replace('/')
+  }, [billingEnabled])
 
   // Read query params on mount
   useEffect(() => {

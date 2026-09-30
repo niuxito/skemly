@@ -1,5 +1,6 @@
 import { neon } from '@neondatabase/serverless'
 import { getStripe } from './_stripe.js'
+import { isBillingEnabled } from './_billing.js'
 
 // Disable Vercel body parser — Stripe needs the raw body to verify the signature
 export const config = { api: { bodyParser: false } }
@@ -17,6 +18,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
+  if (!isBillingEnabled()) return res.status(404).json({ error: 'Billing is disabled' })
 
   const sig = req.headers['stripe-signature']
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET

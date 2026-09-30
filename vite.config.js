@@ -110,6 +110,9 @@ function stripePlugin() {
       // checkout and portal: standard JSON body handlers (routed by req.url inside stripeHandler)
       server.middlewares.use('/api/stripe/checkout', (req, res) => runAuthHandler(stripeHandler, req, res))
       server.middlewares.use('/api/stripe/portal',   (req, res) => runAuthHandler(stripeHandler, req, res))
+      server.middlewares.use('/api/stripe/status',   (req, res) => runAuthHandler(
+        (vReq, vRes) => stripeHandler({ ...vReq, url: '/api/stripe/status' }, vRes), req, res,
+      ))
 
       // webhook: needs raw body for Stripe signature verification
       server.middlewares.use('/api/stripe/webhook', async (req, res) => {
@@ -324,9 +327,13 @@ function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, f
   }
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ mode, command }) => {
   // loadEnv with '' prefix loads ALL variables (not just VITE_ ones)
   const env = loadEnv(mode, process.cwd(), '')
+
+  if (command === 'serve' && !(process.env.ANTHROPIC_API_KEY ?? env.ANTHROPIC_API_KEY)) {
+    throw new Error('ANTHROPIC_API_KEY is required. Set it in .env (see README).')
+  }
 
   // Expose server-side env vars to API handlers running inside the dev server.
   // (loadEnv returns an object but does NOT mutate process.env)

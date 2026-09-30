@@ -61,7 +61,8 @@ JWT_SECRET=your-secret
 RESEND_API_KEY=re_...
 FROM_EMAIL=noreply@yourdomain.com
 
-# Stripe (optional — only needed for billing)
+# Stripe (optional). Without STRIPE_SECRET_KEY billing is disabled:
+# no plans page, no checkout, and signed-in users get every feature.
 STRIPE_SECRET_KEY=sk_...
 STRIPE_WEBHOOK_SECRET=whsec_...
 STRIPE_PRICE_STARTER=price_...
@@ -212,6 +213,12 @@ tests/            # Vitest unit tests
 examples/         # Built-in .vibe DSL example files
 ```
 
+## Self-hosting
+
+`ANTHROPIC_API_KEY` is mandatory: `npm run dev` and `node server.js` refuse to start without it. The diagrams are generated with your own key, so you pay for your own usage.
+
+Billing is optional. [skemly.app](https://skemly.app) runs with Stripe and paid plans; a self-hosted instance without `STRIPE_SECRET_KEY` hides the plans and unlocks every feature for signed-in users. Anonymous visitors keep the free daily limits, so a public instance cannot drain your key.
+
 ## License
 
-Private — all rights reserved.
+[MIT](LICENSE)

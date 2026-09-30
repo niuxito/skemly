@@ -1,3 +1,4 @@
+import { effectivePlan } from './_billing.js'
 /**
  * Prompt enhancer logic — invoked from api/chat.js when ?op=enhance.
  *
@@ -63,7 +64,7 @@ export async function handleEnhancePrompt(req, res, deps) {
     try {
       const sql = neon(process.env.DATABASE_URL)
       const rows = await sql`SELECT plan FROM users WHERE id = ${userId}`
-      userPlan = rows[0]?.plan ?? 'free'
+      userPlan = effectivePlan(rows[0]?.plan)
     } catch (err) {
       console.error('[enhance-prompt] plan lookup error:', err.message)
     }
