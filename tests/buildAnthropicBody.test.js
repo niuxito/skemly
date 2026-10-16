@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { buildAnthropicBody } from '../api/_buildAnthropicBody.js'
+import { buildAnthropicBody, validateMessages, MAX_MESSAGES, MAX_MESSAGE_CHARS, MAX_TOKENS } from '../api/_buildAnthropicBody.js'
+import { SYSTEM_PROMPT } from '../api/_systemPrompt.js'
 
 function makeBody(overrides = {}) {
   return {
@@ -32,10 +33,18 @@ describe('buildAnthropicBody – no attachment', () => {
     expect(result.messages).toEqual(body.messages)
   })
 
-  it('preserves other fields like model and system', () => {
-    const result = buildAnthropicBody(makeBody())
-    expect(result.model).toBe('claude-haiku-4-5')
-    expect(result.system).toBe('You are helpful.')
+  it('uses the server system prompt and max_tokens, ignoring the client', () => {
+    const result = buildAnthropicBody(makeBody({ max_tokens: 64000, temperature: 1, tools: [{ name: 'x' }] }))
+    expect(result.system).toBe(SYSTEM_PROMPT)
+    expect(result.max_tokens).toBe(MAX_TOKENS)
+    expect(result).not.toHaveProperty('model')
+    expect(result).not.toHaveProperty('temperature')
+    expect(result).not.toHaveProperty('tools')
+  })
+
+  it('drops extra fields inside messages', () => {
+    const result = buildAnthropicBody(makeBody({ messages: [{ role: 'user', content: 'Hi', cache_control: { type: 'ephemeral' } }] }))
+    expect(result.messages).toEqual([{ role: 'user', content: 'Hi' }])
   })
 })
 
@@ -173,5 +182,39 @@ describe('buildAnthropicBody – only last user message transformed', () => {
     // Last message is assistant — should remain string
     const lastMsg = result.messages[result.messages.length - 1]
     expect(typeof lastMsg.content).toBe('string')
+  })
+})
+
+// ─── Message validation ───────────────────────────────────────────────────────
+
+describe('validateMessages', () => {
+  it('accepts a normal conversation', () => {
+    expect(validateMessages([
+      { role: 'assistant', content: '[A] -> [B]' },
+      { role: 'user', content: 'add C' },
+    ])).toBeNull()
+  })
+
+  it('rejects missing or empty messages', () => {
+    expect(validateMessages(undefined)).not.toBeNull()
+    expect(validateMessages([])).not.toBeNull()
+  })
+
+  it('rejects other roles and non-string content', () => {
+    expect(validateMessages([{ role: 'system', content: 'x' }])).not.toBeNull()
+    expect(validateMessages([{ role: 'user', content: [{ type: 'text', text: 'x' }] }])).not.toBeNull()
+  })
+
+  it('rejects an assistant prefill as the last message', () => {
+    expect(validateMessages([
+      { role: 'user', content: 'hi' },
+      { role: 'assistant', content: 'Sure, here is' },
+    ])).not.toBeNull()
+  })
+
+  it('rejects too many or too long messages', () => {
+    const many = Array.from({ length: MAX_MESSAGES + 1 }, () => ({ role: 'user', content: 'x' }))
+    expect(validateMessages(many)).not.toBeNull()
+    expect(validateMessages([{ role: 'user', content: 'x'.repeat(MAX_MESSAGE_CHARS + 1) }])).not.toBeNull()
   })
 })

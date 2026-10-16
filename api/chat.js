@@ -14,7 +14,7 @@ import {
   incrementFileCountByUser,
   checkEnhanceEligibility,
 } from './_rateLimit.js'
-import { buildAnthropicBody } from './_buildAnthropicBody.js'
+import { buildAnthropicBody, validateMessages } from './_buildAnthropicBody.js'
 import { detectInjection } from './_promptGuard.js'
 import { checkCsrf } from './_csrf.js'
 import { getUserFromRequest } from './_auth.js'
@@ -117,7 +117,11 @@ export default async function handler(req, res) {
   const { attachment } = req.body
   if (attachment) {
     // Compute actual size from base64 data — ignore client-supplied `size` field
-    const actualBytes = Math.ceil((attachment.data?.length ?? 0) * 0.75)
+    // (text files arrive as `text`, binary ones as base64 `data`)
+    const actualBytes = Math.max(
+      Math.ceil((attachment.data?.length ?? 0) * 0.75),
+      typeof attachment.text === 'string' ? attachment.text.length : 0,
+    )
     if (actualBytes > FILE_MAX_SIZE) {
       return res.status(400).json({
         error: {
@@ -152,8 +156,14 @@ export default async function handler(req, res) {
     }
   }
 
+  // ─── Message validation ───────────────────────────────────────────────────
+  const invalid = validateMessages(req.body?.messages)
+  if (invalid) {
+    return res.status(400).json({ error: { type: 'invalid_request', message: invalid } })
+  }
+
   // ─── Prompt injection guard ───────────────────────────────────────────────
-  const userMessages = req.body?.messages ?? []
+  const userMessages = req.body.messages
   const lastUserMsg = userMessages.filter(m => m.role === 'user').pop()
   const injection = detectInjection(lastUserMsg?.content ?? '')
 
@@ -169,7 +179,8 @@ export default async function handler(req, res) {
   }
 
   // ─── Model selection ──────────────────────────────────────────────────────
-  const { isFirstShot } = req.body
+  // Sonnet only for the opening diagram: a single user message, no history
+  const isFirstShot = req.body.isFirstShot === true && req.body.messages.length === 1
   const isPro = limits.model_tier === 'pro'
   const selectedModel = isPro
     ? (isFirstShot ? MODEL_PRO_FIRSTSHOT : MODEL_PRO_EDIT)
