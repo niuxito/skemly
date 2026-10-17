@@ -109,8 +109,9 @@ export default async function handler(req, res) {
     })
   }
 
-  if (rl.limit !== null && rl.remaining !== undefined) {
-    res.setHeader('X-RateLimit-Remaining', String(Math.max(0, rl.limit - (rl.count ?? 0) - 1)))
+  // The limit checks return { allowed, remaining }; remaining is null when unlimited
+  if (typeof rl.remaining === 'number') {
+    res.setHeader('X-RateLimit-Remaining', String(rl.remaining))
   }
 
   // ─── File attachment validation & rate limiting ───────────────────────────
@@ -151,8 +152,8 @@ export default async function handler(req, res) {
       })
     }
 
-    if (frl.limit !== null) {
-      res.setHeader('X-FileRateLimit-Remaining', String(Math.max(0, frl.limit - (frl.count ?? 0) - 1)))
+    if (typeof frl.remaining === 'number') {
+      res.setHeader('X-FileRateLimit-Remaining', String(frl.remaining))
     }
   }
 
