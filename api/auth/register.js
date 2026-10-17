@@ -3,12 +3,16 @@ import { hashPassword, signToken, generateOtp, setAuthCookie } from '../_auth.js
 import { sendVerificationEmail } from '../_email.js'
 import { checkAndIncrementRegisterAttempt } from '../_rateLimit.js'
 import { checkCsrf } from '../_csrf.js'
+import { isRegistrationEnabled } from '../_billing.js'
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
   }
   if (checkCsrf(req, res)) return
+  if (!isRegistrationEnabled()) {
+    return res.status(403).json({ error: 'El registro de nuevas cuentas está desactivado.' })
+  }
 
   const { email, password, name, termsAccepted } = req.body ?? {}
 

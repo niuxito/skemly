@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { X, LogIn, UserPlus, Mail } from 'lucide-react'
 import { useT } from '../lib/i18n.jsx'
+import { useRegistrationEnabled } from '../hooks/useBillingEnabled.js'
 
 export default function AuthModal({
   open,
@@ -10,6 +11,7 @@ export default function AuthModal({
   defaultTab = 'login',
   defaultEmail = '',
 }) {
+  const registrationEnabled = useRegistrationEnabled() !== false
   const [tab, setTab] = useState(defaultTab)
   const [email, setEmail] = useState(defaultEmail)
   const [password, setPassword] = useState('')
@@ -35,6 +37,11 @@ export default function AuthModal({
       setLoading(false)
     }
   }, [open, defaultTab, defaultEmail])
+
+  // Sign-up disabled on this instance: only sign-in is offered
+  useEffect(() => {
+    if (!registrationEnabled && tab === 'register') setTab('login')
+  }, [registrationEnabled, tab])
 
   // Reset form when switching tabs (but NOT when switching to verify — keep email)
   useEffect(() => {
@@ -185,7 +192,7 @@ export default function AuthModal({
         </div>
 
         {/* Tabs — hidden on verify step */}
-        {tab !== 'verify' && (
+        {tab !== 'verify' && registrationEnabled && (
           <div className="flex border-b border-slate-100">
             <button
               onClick={() => setTab('login')}
@@ -332,7 +339,7 @@ export default function AuthModal({
               }
             </button>
 
-            <p className="text-center text-xs text-slate-500">
+            {registrationEnabled && <p className="text-center text-xs text-slate-500">
               {tab === 'login' ? (
                 <>{t('auth_no_account')}{' '}
                   <button type="button" onClick={() => setTab('register')} className="underline text-slate-600 hover:text-slate-800">
@@ -346,7 +353,7 @@ export default function AuthModal({
                   </button>
                 </>
               )}
-            </p>
+            </p>}
           </form>
         )}
       </div>

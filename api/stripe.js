@@ -2,7 +2,7 @@ import { neon } from '@neondatabase/serverless'
 import { getUserFromRequest } from './_auth.js'
 import { checkCsrf } from './_csrf.js'
 import { getStripe } from './_stripe.js'
-import { isBillingEnabled } from './_billing.js'
+import { isBillingEnabled, isRegistrationEnabled } from './_billing.js'
 
 const PRICE_IDS = {
   starter: process.env.STRIPE_PRICE_STARTER,
@@ -15,7 +15,7 @@ export default async function handler(req, res) {
   // ── Status (public) — lets the UI hide plans when billing is disabled ────
   if (url.includes('/stripe/status')) {
     if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' })
-    return res.status(200).json({ enabled: isBillingEnabled() })
+    return res.status(200).json({ enabled: isBillingEnabled(), registration: isRegistrationEnabled() })
   }
 
   if (!isBillingEnabled()) return res.status(404).json({ error: 'Billing is disabled' })

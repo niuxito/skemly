@@ -10,6 +10,14 @@ export function isBillingEnabled() {
   return /^(sk|rk)_/.test(process.env.STRIPE_SECRET_KEY ?? '')
 }
 
+/**
+ * Whether new accounts can be created. On by default; set
+ * REGISTRATION_ENABLED=false to keep sign-in for existing users only.
+ */
+export function isRegistrationEnabled() {
+  return process.env.REGISTRATION_ENABLED !== 'false'
+}
+
 /** Plan to enforce for a signed-in user, given the plan stored in the DB. */
 export function effectivePlan(storedPlan) {
   if (!isBillingEnabled()) return 'pro'

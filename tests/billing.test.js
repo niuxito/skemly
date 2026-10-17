@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { isBillingEnabled, effectivePlan } from '../api/_billing.js'
+import { isBillingEnabled, effectivePlan, isRegistrationEnabled } from '../api/_billing.js'
+import registerHandler from '../api/auth/register.js'
 import stripeHandler from '../api/stripe.js'
 import stripeWebhookHandler from '../api/stripe-webhook.js'
 
@@ -58,14 +59,14 @@ describe('stripe endpoints without billing', () => {
     const res = mockRes()
     await stripeHandler({ method: 'GET', url: '/api/stripe/status', headers: {} }, res)
     expect(res.statusCode).toBe(200)
-    expect(res.body).toEqual({ enabled: false })
+    expect(res.body).toEqual({ enabled: false, registration: true })
   })
 
   it('reports status as enabled', async () => {
     process.env.STRIPE_SECRET_KEY = 'sk_test_123'
     const res = mockRes()
     await stripeHandler({ method: 'GET', url: '/api/stripe/status', headers: {} }, res)
-    expect(res.body).toEqual({ enabled: true })
+    expect(res.body).toEqual({ enabled: true, registration: true })
   })
 
   it('rejects checkout and portal with 404', async () => {
@@ -82,5 +83,29 @@ describe('stripe endpoints without billing', () => {
     const res = mockRes()
     await stripeWebhookHandler({ method: 'POST', headers: {} }, res)
     expect(res.statusCode).toBe(404)
+  })
+})
+
+describe('registration switch', () => {
+  afterEach(() => { delete process.env.REGISTRATION_ENABLED })
+
+  it('is enabled unless REGISTRATION_ENABLED=false', () => {
+    expect(isRegistrationEnabled()).toBe(true)
+    process.env.REGISTRATION_ENABLED = 'false'
+    expect(isRegistrationEnabled()).toBe(false)
+  })
+
+  it('status reports it', async () => {
+    process.env.REGISTRATION_ENABLED = 'false'
+    const res = mockRes()
+    await stripeHandler({ method: 'GET', url: '/api/stripe/status', headers: {} }, res)
+    expect(res.body.registration).toBe(false)
+  })
+
+  it('register returns 403 when disabled', async () => {
+    process.env.REGISTRATION_ENABLED = 'false'
+    const res = mockRes()
+    await registerHandler({ method: 'POST', headers: { 'content-type': 'application/json' }, body: { email: 'a@b.co', password: '12345678', termsAccepted: true } }, res)
+    expect(res.statusCode).toBe(403)
   })
 })
