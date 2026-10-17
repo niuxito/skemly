@@ -23,7 +23,7 @@ beforeAll(() => {
   process.env.JWT_SECRET = 'test-secret-admin-users'
 })
 
-import handler from '../../api/admin/users.js'
+import handler from '../../api/admin.js'
 import { requireAdmin } from '../../api/_requireAdmin.js'
 import { _mockSql } from '@neondatabase/serverless'
 
