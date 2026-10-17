@@ -1,13 +1,303 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Skemly</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <script src="/analytics.js"></script>
+  <script src="/lang.js"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Skemly · Caso de estudio · Alexis Parrón</title>
+  <meta name="description" content="Caso de estudio: un lenguaje de diagramas diseñado para que lo escriba una IA. La IA describe y el código dibuja. Problema, enfoque, decisiones y aprendizajes.">
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="canonical" href="https://skemly.app/">
+  <meta property="og:type" content="article">
+  <meta property="og:title" content="Skemly · Caso de estudio">
+  <meta property="og:description" content="Diseñé un lenguaje para que lo escribiera una IA, no una persona.">
+  <meta property="og:url" content="https://skemly.app/">
+  <meta name="theme-color" content="#0f172a">
+  <style>
+    :root{--bg:#fff;--soft:#f1f5f9;--line:#e2e8f0;--ink:#0f172a;--muted:#64748b;--sky:#38bdf8;--skyd:#0284c7;--indigo:#818cf8;--pink:#db2777;--ok:#16a34a;--ko:#dc2626;
+      --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;--mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace}
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    html[lang=es] [lang=en],html[lang=en] [lang=es]{display:none!important}
+    body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.7 var(--sans)}
+    a{color:inherit}
+    :focus-visible{outline:2px solid var(--skyd);outline-offset:3px}
+    .wrap{max-width:1160px;margin:auto;padding:0 32px}
+    header{display:flex;justify-content:space-between;align-items:center;gap:20px;padding:22px 0;border-bottom:1px solid var(--line)}
+    .logo{display:flex;align-items:center;gap:10px;font:700 19px var(--sans);text-decoration:none}
+    .logo svg{width:26px;height:26px}
+    header nav{display:flex;align-items:center;gap:24px;font-size:14px;color:var(--muted)}
+    header nav a{text-decoration:none}header nav a:hover{color:var(--ink)}
+    .switch{font:13px var(--mono);background:none;border:1px solid var(--line);border-radius:999px;color:var(--muted);padding:4px 12px;cursor:pointer}
+    .switch b{color:var(--ink)}
+    .hero{display:grid;grid-template-columns:1fr 1.05fr;gap:56px;align-items:center;padding:64px 0 80px}
+    .kicker{font:12px var(--mono);letter-spacing:.14em;color:var(--skyd)}
+    h1{font:700 clamp(32px,4vw,52px)/1.1 var(--sans);letter-spacing:-.035em;margin:16px 0 20px}
+    .grad{background:linear-gradient(90deg,var(--sky),var(--indigo));-webkit-background-clip:text;background-clip:text;color:transparent}
+    .lead{color:var(--muted);max-width:520px}
+    .actions{display:flex;gap:12px;margin-top:30px;flex-wrap:wrap}
+    .btn{display:inline-block;padding:12px 20px;border-radius:999px;text-decoration:none;font:600 15px var(--sans);border:1px solid var(--line);color:var(--ink);background:#fff;cursor:pointer}
+    .btn:hover{border-color:var(--ink)}
+    .btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+    .btn.primary:hover{background:#1e293b}
+    .live{border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 24px 60px rgba(15,23,42,.08);background:#fff}
+    .live .bar{display:flex;justify-content:space-between;padding:10px 16px;border-bottom:1px solid var(--line);font:12px var(--mono);color:var(--muted)}
+    .live .bar b{color:var(--skyd);font-weight:500}
+    .code{margin:0;padding:14px 18px;font:13.5px/1.75 var(--mono);background:var(--soft);min-height:142px;white-space:pre;overflow:hidden}
+    .code .s{color:var(--skyd)}.code .t{color:#6366f1}.code .k{color:var(--pink)}
+    .cursor{display:inline-block;width:7px;height:16px;background:var(--ink);vertical-align:-3px;animation:blink 1s steps(2) infinite}
+    @keyframes blink{50%{opacity:0}}
+    .stage{padding:10px 18px 16px;background-image:radial-gradient(#e2e8f0 1px,transparent 1px);background-size:16px 16px}
+    .stage svg{width:100%;height:auto;display:block}
+    .stage [data-step]{opacity:0;transform:translateY(6px);transition:opacity .45s,transform .45s}
+    .stage [data-step].on{opacity:1;transform:none}
+    .section{padding:72px 0 88px;border-top:1px solid var(--line);scroll-margin-top:10px}
+    h2{font:700 34px/1.15 var(--sans);letter-spacing:-.025em;margin:10px 0 14px;max-width:820px}
+    h3{font:600 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--skyd);margin:0 0 14px}
+    .section p{color:var(--muted);max-width:720px}
+    .section p strong{color:var(--ink)}
+    .pipe{display:grid;grid-template-columns:repeat(4,1fr);margin:36px 0 34px;font:13px var(--mono)}
+    .pipe div{padding:14px 16px;border:1px solid var(--line);background:#fff}
+    .pipe div+div{border-left:none}
+    .pipe div:first-child{background:#eff6ff;border-color:#bfdbfe}
+    .pipe small{display:block;color:var(--muted)}
+    .rules{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(4,1fr);gap:20px}
+    .rules li{font-size:15px;color:var(--muted);border-top:2px solid var(--ink);padding-top:14px}
+    .rules b{display:block;color:var(--ink);font-size:16px;margin-bottom:4px}
+    code{font:13px var(--mono);background:var(--soft);padding:1px 6px;border-radius:4px}
+    .groups{display:grid;grid-template-columns:repeat(3,1fr);gap:32px;margin-top:34px}
+    .groups ul{list-style:none;margin:0;padding:0;display:grid;gap:16px;font-size:15px;line-height:1.6;color:var(--muted)}
+    .groups li strong{display:block;color:var(--ink);font-size:16px}
+    .groups > div{border-top:2px solid var(--ink);padding-top:16px}
+    .today{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:center}
+    .today .stack{font:13px var(--mono);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+    .today .stack div{padding:14px 18px;display:flex;justify-content:space-between;gap:12px}
+    .today .stack div+div{border-top:1px solid var(--line)}
+    .today .stack div:first-child{background:#eff6ff}
+    .today .stack span{color:var(--muted)}
+    .note{font:13px var(--mono);color:var(--muted)}
+    form{display:grid;grid-template-columns:1fr 1fr;gap:16px;max-width:760px;margin-top:30px}
+    label{display:grid;gap:6px;font:600 13px var(--sans);color:var(--ink)}
+    label.full{grid-column:1/-1}
+    input,textarea{font:16px/1.5 var(--sans);color:var(--ink);background:#fff;border:1px solid #cbd5e1;border-radius:10px;padding:12px 14px;width:100%}
+    input:focus,textarea:focus{outline:none;border-color:var(--skyd);box-shadow:0 0 0 3px rgba(56,189,248,.2)}
+    textarea{min-height:150px;resize:vertical}
+    .trap{position:absolute;left:-10000px;width:1px;height:1px;overflow:hidden}
+    .form-foot{grid-column:1/-1;display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+    .status{font:14px var(--sans);color:var(--muted)}
+    .status.ok{color:var(--ok)}.status.ko{color:var(--ko)}
+    footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:26px 0 40px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+    footer nav{display:flex;gap:18px}
+    footer a{text-decoration:none}footer a:hover{color:var(--ink)}
+    @media(max-width:880px){
+      .wrap{padding:0 20px}
+      .hero,.today{grid-template-columns:1fr}
+      .hero{padding-top:40px}
+      .pipe,.rules{grid-template-columns:1fr 1fr}
+      .pipe div:nth-child(3){border-left:1px solid var(--line)}
+      .pipe div:nth-child(n+3){border-top:none}
+      .groups,form{grid-template-columns:1fr}
+      header nav a{display:none}
+    }
+    @media(max-width:480px){.rules,.pipe{grid-template-columns:1fr}.pipe div+div{border-left:1px solid var(--line);border-top:none}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.cursor{animation:none}.stage [data-step]{transition:none}}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="logo" href="/"><svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="7" fill="#0f172a"/><rect x="9" y="3" width="14" height="8" rx="2" fill="#38bdf8"/><path d="M16 11v4M16 15l-8 5M16 15l8 5" stroke="#64748b" stroke-width="1.5" stroke-linecap="round"/><rect x="1" y="20" width="13" height="8" rx="2" fill="#818cf8"/><rect x="18" y="20" width="13" height="8" rx="2" fill="#818cf8"/></svg>Skemly</a>
+    <nav>
+      <a href="#problema"><span lang="es">Problema</span><span lang="en">Problem</span></a>
+      <a href="#lenguaje"><span lang="es">Lenguaje</span><span lang="en">Language</span></a>
+      <a href="#decisiones"><span lang="es">Decisiones</span><span lang="en">Decisions</span></a>
+      <a href="/app">Demo</a>
+      <button class="switch" type="button" id="lang-switch" aria-label="Cambiar idioma / Change language"><span lang="es"><b>ES</b> / EN</span><span lang="en">ES / <b>EN</b></span></button>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div>
+      <span class="kicker"><span lang="es">CASO DE ESTUDIO · 2026</span><span lang="en">CASE STUDY · 2026</span></span>
+      <h1 lang="es">Diseñé un lenguaje para que lo escribiera <span class="grad">una IA, no una persona.</span></h1>
+      <h1 lang="en">I designed a language for <span class="grad">an AI to write, not a person.</span></h1>
+      <p class="lead" lang="es">Skemly es un experimento de 2026: describes un sistema, un proceso o una idea y aparece el diagrama. Hoy cualquier asistente lo hace; esta es la historia de cómo lo resolví cuando no era así, y de por qué empecé por el lenguaje y no por la interfaz.</p>
+      <p class="lead" lang="en">Skemly is a 2026 experiment: you describe a system, a process or an idea, and the diagram appears. Any assistant does this today; this is how I solved it when that wasn't the case, and why I started with the language rather than the interface.</p>
+      <div class="actions">
+        <a class="btn primary" href="/app"><span lang="es">Probar Skemly →</span><span lang="en">Try Skemly →</span></a>
+        <a class="btn" href="#contacto"><span lang="es">Cuéntame tu caso</span><span lang="en">Tell me about your case</span></a>
+      </div>
+    </div>
+    <figure class="live" style="margin:0">
+      <div class="bar"><span lang="es">la IA escribe</span><span lang="en">the AI writes</span><b id="status"></b></div>
+      <pre class="code" id="code" aria-hidden="true"></pre>
+      <div class="stage">
+        <svg viewBox="0 0 420 330" font-family="ui-sans-serif,system-ui,sans-serif" font-size="14" text-anchor="middle" role="img" aria-label="Diagrama: Internet, balanceador, dos servidores de aplicación y base de datos dentro de una nube privada">
+          <defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#64748b"/></marker></defs>
+          <g data-step="2"><rect x="34" y="78" width="352" height="246" rx="12" fill="#f0f9ff" stroke="#7dd3fc" stroke-dasharray="5 4"/><text x="92" y="98" font-size="12" fill="#0284c7" lang="es">Nube privada</text><text x="92" y="98" font-size="12" fill="#0284c7" lang="en">Private cloud</text></g>
+          <g data-step="1">
+            <path d="M168 50a16 16 0 0 1 4-30a22 22 0 0 1 40-6a18 18 0 0 1 34 10a14 14 0 0 1 -4 26z" fill="#fff" stroke="#94a3b8" stroke-width="1.5"/><text x="208" y="40">Internet</text>
+            <path d="M210 54v52" stroke="#64748b" stroke-width="1.5" marker-end="url(#ar)"/>
+            <rect x="150" y="108" width="120" height="38" rx="8" fill="#e0f2fe" stroke="#38bdf8" stroke-width="1.5"/><text x="210" y="132" lang="es">Balanceador</text><text x="210" y="132" lang="en">Load balancer</text>
+          </g>
+          <g data-step="3">
+            <path d="M200 146L125 184M220 146L295 184" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#ar)"/>
+            <rect x="62" y="186" width="122" height="38" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/><text x="123" y="210">App 1</text>
+            <rect x="236" y="186" width="122" height="38" rx="8" fill="#fff" stroke="#cbd5e1" stroke-width="1.5"/><text x="297" y="210">App 2</text>
+          </g>
+          <g data-step="4">
+            <path d="M123 224L193 266M297 224L227 266" stroke="#64748b" stroke-width="1.5" fill="none" marker-end="url(#ar)"/>
+            <path d="M150 272c0-10 120-10 120 0v34c0 10-120 10-120 0z" fill="#eef2ff" stroke="#818cf8" stroke-width="1.5"/><path d="M150 272c0 10 120 10 120 0" fill="none" stroke="#818cf8" stroke-width="1.5"/><text x="210" y="300" lang="es">Base de datos</text><text x="210" y="300" lang="en">Database</text>
+          </g>
+        </svg>
+      </div>
+    </figure>
+  </section>
+
+  <section class="section" id="problema">
+    <span class="kicker"><span lang="es">01 · EL PROBLEMA</span><span lang="en">01 · THE PROBLEM</span></span>
+    <h2 lang="es">El problema no era el modelo, era lo que le pedía.</h2>
+    <h2 lang="en">The problem wasn't the model, it was what I was asking of it.</h2>
+    <p lang="es">Pedirle coordenadas a una IA es pedirle que haga de maquetador, y no lo es. Pedirle Mermaid es obligarla a cumplir una sintaxis pensada para personas. Las dos cosas fallaban por el mismo motivo: el formato no estaba hecho para quien lo escribía.</p>
+    <p lang="en">Asking an AI for coordinates means asking it to be a layout engine, and it isn't one. Asking it for Mermaid forces it to follow a syntax designed for people. Both failed for the same reason: the format wasn't made for whoever was writing it.</p>
+  </section>
+
+  <section class="section" id="lenguaje">
+    <span class="kicker"><span lang="es">02 · EL ENFOQUE</span><span lang="en">02 · THE APPROACH</span></span>
+    <h2 lang="es">Un lenguaje a la medida de quien lo escribe.</h2>
+    <h2 lang="en">A language built for whoever writes it.</h2>
+    <p lang="es">En vez de adaptar la IA a un formato, adapté el formato a la IA. La IA describe y el código dibuja.</p>
+    <p lang="en">Instead of adapting the AI to a format, I adapted the format to the AI. The AI describes; the code draws.</p>
+    <div class="pipe">
+      <div><span lang="es">IA</span><span lang="en">AI</span><small lang="es">describe qué hay</small><small lang="en">describes what's there</small></div>
+      <div><span lang="es">Analizador</span><span lang="en">Parser</span><small lang="es">lo entiende y lo repara</small><small lang="en">reads it and repairs it</small></div>
+      <div><span lang="es">Maquetación</span><span lang="en">Layout</span><small lang="es">coloca cada pieza</small><small lang="en">places every piece</small></div>
+      <div><span lang="es">Tema</span><span lang="en">Theme</span><small lang="es">decide el aspecto</small><small lang="en">decides the look</small></div>
+    </div>
+    <ul class="rules" lang="es">
+      <li><b>Pocos tokens</b>La forma va en los signos, sin palabras clave; <code>[A], [B] -&gt; [C]</code> son dos flechas.</li>
+      <li><b>Sin ambigüedad</b>Cada pieza tiene un identificador estable; "App Server" y "app server" son lo mismo.</li>
+      <li><b>Tolerante</b>Si falta un cierre al final de la línea, el analizador lo completa en vez de fallar.</li>
+      <li><b>Sin coordenadas</b>El modelo nunca decide posiciones ni tamaños; lo hace el motor de maquetación.</li>
+    </ul>
+    <ul class="rules" lang="en">
+      <li><b>Few tokens</b>The shape lives in the symbols, no keywords; <code>[A], [B] -&gt; [C]</code> is two arrows.</li>
+      <li><b>No ambiguity</b>Every piece has a stable id; "App Server" and "app server" are the same node.</li>
+      <li><b>Forgiving</b>If a closing symbol is missing at the end of a line, the parser adds it instead of failing.</li>
+      <li><b>No coordinates</b>The model never decides positions or sizes; the layout engine does.</li>
+    </ul>
+  </section>
+
+  <section class="section" id="decisiones">
+    <span class="kicker"><span lang="es">03 · DECISIONES</span><span lang="en">03 · DECISIONS</span></span>
+    <h2 lang="es">Decisiones que tomé</h2>
+    <h2 lang="en">Decisions I made</h2>
+    <div class="groups">
+      <div>
+        <h3 lang="es">Coste</h3><h3 lang="en">Cost</h3>
+        <ul lang="es">
+          <li><strong>El modelo justo para cada momento.</strong> Sonnet escribe el primer diagrama, que es donde se decide la estructura. Los cambios ("añade una caché aquí") los hace Haiku, más rápido y mucho más barato.</li>
+          <li><strong>Un lenguaje corto sale barato.</strong> Con pocos tokens por diagrama, la respuesta llega antes y cuesta menos. El formato era también una decisión de coste.</li>
+        </ul>
+        <ul lang="en">
+          <li><strong>The right model for each moment.</strong> Sonnet writes the first diagram, where the structure is decided. Changes ("add a cache here") go to Haiku, faster and much cheaper.</li>
+          <li><strong>A short language is a cheap language.</strong> With few tokens per diagram, the answer arrives sooner and costs less. The format was a cost decision too.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 lang="es">Calidad</h3><h3 lang="en">Quality</h3>
+        <ul lang="es">
+          <li><strong>Primero entender, después dibujar.</strong> Un modelo rápido convierte una petición vaga ("la arquitectura de una tienda online") en un encargo preciso. Si falla, se usa la petición original: nunca bloquea.</li>
+          <li><strong>Una maquetación para cada tipo de diagrama.</strong> Arquitecturas, mapas mentales, árboles, secuencias y modelos de datos no se ordenan igual, y cada uno tiene la suya.</li>
+          <li><strong>El contenido, separado del aspecto.</strong> El mismo diagrama se ve limpio, a mano alzada o cyberpunk sin que la IA lo reescriba.</li>
+        </ul>
+        <ul lang="en">
+          <li><strong>Understand first, then draw.</strong> A fast model turns a vague request ("the architecture of an online shop") into a precise brief. If it fails, the original request is used: it never blocks.</li>
+          <li><strong>A layout for each kind of diagram.</strong> Architectures, mind maps, trees, sequences and data models aren't arranged the same way, and each has its own.</li>
+          <li><strong>Content separate from looks.</strong> The same diagram can look clean, hand-drawn or cyberpunk without the AI rewriting it.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 lang="es">Seguridad y experiencia</h3><h3 lang="en">Security and experience</h3>
+        <ul lang="es">
+          <li><strong>No fiarse de lo que llega.</strong> Los intentos de manipular al asistente se detectan, se cuentan y se bloquean, y cada visitante tiene un límite diario.</li>
+          <li><strong>Hablar, adjuntar y compartir.</strong> Se puede dictar la petición, adjuntar una imagen o un PDF como contexto, compartir el diagrama con un enlace y exportarlo a SVG o PNG.</li>
+        </ul>
+        <ul lang="en">
+          <li><strong>Don't trust what comes in.</strong> Attempts to manipulate the assistant are detected, counted and blocked, and every visitor has a daily limit.</li>
+          <li><strong>Talk, attach and share.</strong> You can dictate the request, attach an image or a PDF as context, share the diagram with a link and export it as SVG or PNG.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="aprendizajes">
+    <span class="kicker"><span lang="es">04 · APRENDIZAJES</span><span lang="en">04 · LEARNINGS</span></span>
+    <h2 lang="es">Qué aprendí</h2>
+    <h2 lang="en">What I learned</h2>
+    <p lang="es">Que el formato importa tanto como el prompt: diseñar el lenguaje para el modelo mejoró los resultados más que cualquier ajuste de instrucciones. <strong>Que lo que se puede resolver con código no se le pide a un modelo:</strong> un algoritmo coloca las cajas al instante, gratis y siempre igual. Que tolerar errores pequeños sale más barato que pedir otro intento. Que la seguridad de una app con IA no está solo en el prompt: al revisar el proyecto para escribir esta página descubrí que el servidor aceptaba instrucciones del navegador, y lo cerré. Y que una aplicación "AI-first" no es la que más IA usa, sino la que la usa donde aporta y deja el resto a lo de siempre.</p>
+    <p lang="en">That the format matters as much as the prompt: designing the language for the model improved results more than any tweak to the instructions. <strong>That what code can solve, you don't ask a model to do:</strong> an algorithm places the boxes instantly, for free and the same way every time. That tolerating small mistakes is cheaper than asking for another attempt. That the security of an AI app isn't only in the prompt: while reviewing the project to write this page, I found the server accepted instructions from the browser, and I closed it. And that an "AI-first" application isn't the one that uses the most AI, but the one that uses it where it adds value and leaves the rest to ordinary code.</p>
+  </section>
+
+  <section class="section" id="hoy">
+    <span class="kicker"><span lang="es">05 · HOY</span><span lang="en">05 · TODAY</span></span>
+    <div class="today">
+      <div>
+        <h2 lang="es">Hoy los modelos dibujan solos. Y lo hacen igual.</h2>
+        <h2 lang="en">Models draw on their own today. And they do it the same way.</h2>
+        <p lang="es">Cuando un asistente te dibuja un diagrama, no coloca píxeles: escribe un lenguaje de texto (Mermaid, SVG, código) y otro programa lo pinta. Es la misma separación que hizo funcionar Skemly. La herramienta ha caducado; la forma de pensarla se ha convertido en la norma.</p>
+        <p lang="en">When an assistant draws you a diagram, it doesn't place pixels: it writes a text language (Mermaid, SVG, code) and another program renders it. It's the same split that made Skemly work. The tool has expired; the way of thinking about it has become the norm.</p>
+      </div>
+      <div class="stack" aria-hidden="true">
+        <div><b lang="es">El modelo escribe</b><b lang="en">The model writes</b><span lang="es">texto</span><span lang="en">text</span></div>
+        <div><b lang="es">El código coloca</b><b lang="en">The code lays out</b><span lang="es">algoritmo</span><span lang="en">algorithm</span></div>
+        <div><b lang="es">El navegador pinta</b><b lang="en">The browser renders</b><span>SVG</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="demo">
+    <span class="kicker">06 · DEMO</span>
+    <h2 lang="es">Pruébalo tú mismo.</h2>
+    <h2 lang="en">Try it yourself.</h2>
+    <p lang="es">Empieza por algo que conozcas bien: la arquitectura de tu producto, el proceso de alta de un cliente o un tema que estés estudiando. Mira el diagrama, cambia el estilo a mano alzada y pide un cambio. Luego abre el código: esas pocas líneas son todo lo que escribió la IA.</p>
+    <p lang="en">Start with something you know well: your product's architecture, a customer onboarding process or a topic you're studying. Look at the diagram, switch to the hand-drawn style and ask for a change. Then open the code: those few lines are everything the AI wrote.</p>
+    <p class="note" lang="es">10 peticiones al día, sin registro. El código es abierto: <a href="https://github.com/niuxito/skemly" target="_blank" rel="noopener noreferrer">ver en GitHub ↗</a></p>
+    <p class="note" lang="en">10 requests a day, no sign-up. The code is open: <a href="https://github.com/niuxito/skemly" target="_blank" rel="noopener noreferrer">view on GitHub ↗</a></p>
+    <div class="actions"><a class="btn primary" href="/app"><span lang="es">Abrir Skemly →</span><span lang="en">Open Skemly →</span></a></div>
+  </section>
+
+  <section class="section" id="contacto">
+    <span class="kicker"><span lang="es">07 · CONTACTO</span><span lang="en">07 · CONTACT</span></span>
+    <h2 lang="es">La IA describe. El código ejecuta. Alguien tiene que decidir la frontera.</h2>
+    <h2 lang="en">The AI describes. The code executes. Someone has to draw the line.</h2>
+    <p lang="es">Mi regla es sencilla: si algo se puede resolver con código, de forma determinista y más barata, no se le pide a un modelo. El modelo entra donde hace falta criterio; el resto es código. Si estás metiendo IA en tu producto y quieres trazar esa frontera (qué hace el modelo y qué el código, qué modelo, cuánto cuesta, cómo se protege), escríbeme y lo vemos.</p>
+    <p lang="en">My rule is simple: if something can be solved with code, deterministically and more cheaply, you don't ask a model to do it. The model comes in where judgement is needed; the rest is code. If you're bringing AI into your product and want to draw that line (what the model does and what the code does, which model, what it costs, how it's protected), write to me and let's look at it.</p>
+    <form id="contact-form" novalidate>
+      <label><span lang="es">Nombre</span><span lang="en">Name</span>
+        <input name="name" required maxlength="120" autocomplete="name"></label>
+      <label><span lang="es">Cómo contactarte</span><span lang="en">How to reach you</span>
+        <input name="contact" required minlength="3" maxlength="200" data-ph-es="Email, LinkedIn o lo que prefieras" data-ph-en="Email, LinkedIn or whatever you prefer"></label>
+      <label class="full"><span lang="es">Tu caso</span><span lang="en">Your case</span>
+        <textarea name="message" required minlength="10" maxlength="3000" data-ph-es="Qué quieres resolver y con qué cuentas hoy" data-ph-en="What you want to solve and what you have today"></textarea></label>
+      <div class="trap" aria-hidden="true"><label>Website <input name="website" tabindex="-1" autocomplete="off"></label></div>
+      <div class="form-foot">
+        <button class="btn primary" type="submit"><span lang="es">Cuéntame tu caso →</span><span lang="en">Tell me about your case →</span></button>
+        <span class="status" id="form-status" role="status" aria-live="polite"></span>
+      </div>
+    </form>
+  </section>
+
+  <footer>
+    <span><span lang="es">Un caso de estudio de</span><span lang="en">A case study by</span> <a href="https://www.alexisparron.com">Alexis Parrón</a></span>
+    <nav>
+      <a href="https://github.com/niuxito/skemly" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="https://www.alexisparron.com/privacidad.html"><span lang="es">Privacidad</span><span lang="en">Privacy</span></a>
+      <a href="#" data-consent-open>Cookies</a>
+    </nav>
+  </footer>
+</div>
+<script src="/landing.js" defer></script>
+</body>
 </html>

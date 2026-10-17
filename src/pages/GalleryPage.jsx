@@ -226,7 +226,7 @@ export default function GalleryPage() {
     // Store the active session id in localStorage so App picks it up
     const activeKey = user?.id ? `vibediag_active_${user.id}` : 'vibediag_active'
     localStorage.setItem(activeKey, session.id)
-    window.location.href = '/'
+    window.location.href = '/app'
   }
 
   function renameSession(id, newTitle) {
@@ -316,7 +316,7 @@ export default function GalleryPage() {
       <header className="flex items-center justify-between px-4 py-3 bg-white border-b border-slate-200 shrink-0">
         <div className="flex items-center gap-3">
           <a
-            href="/"
+            href="/app"
             className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 transition-colors"
           >
             <ArrowLeft size={14} />
@@ -360,7 +360,7 @@ export default function GalleryPage() {
               <>
                 <p className="text-sm font-medium text-slate-600">No tienes diagramas guardados aún</p>
                 <a
-                  href="/"
+                  href="/app"
                   className="mt-1 px-4 py-2 text-xs font-medium rounded-lg bg-slate-800 text-white hover:bg-slate-700 transition-colors"
                 >
                   Crear mi primer diagrama

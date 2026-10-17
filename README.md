@@ -69,6 +69,13 @@ STRIPE_PRICE_STARTER=price_...
 STRIPE_PRICE_PRO=price_...
 APP_URL=https://yourapp.vercel.app
 
+# Landing page contact form → Telegram (optional; without them the form is disabled)
+NOTIFY_BOT_TOKEN=123456:ABC...
+NOTIFY_CHAT_ID=123456789
+
+# Set to false to turn off sign-up (existing accounts can still sign in)
+REGISTRATION_ENABLED=true
+
 # Optional limits (defaults shown)
 DAILY_LIMIT=20
 FILE_DAILY_LIMIT_ANON=5
@@ -104,6 +111,7 @@ CREATE TABLE rate_limits (
   share_count INTEGER DEFAULT 0,
   register_count INTEGER DEFAULT 0,
   injection_count INTEGER DEFAULT 0,
+  contact_count INTEGER DEFAULT 0,
   PRIMARY KEY (ip_address, window_date)
 );
 

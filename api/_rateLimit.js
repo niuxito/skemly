@@ -423,3 +423,29 @@ export async function incrementFileCountByUser({ userId, ip, databaseUrl }) {
     WHERE user_id = ${userId} AND window_date = ${today}
   `
 }
+
+/**
+ * Counts one contact-form message for the IP. At most `limit` per day.
+ * Needs the rate_limits.contact_count column (see README).
+ */
+export async function checkAndIncrementContact({ ip, databaseUrl, limit = 3 }) {
+  if (!databaseUrl) return { allowed: true }
+  try {
+    const sql = neon(databaseUrl)
+    const rows = await sql`
+      INSERT INTO rate_limits (ip_address, window_date, request_count, contact_count, updated_at)
+      VALUES (${ip}, CURRENT_DATE, 0, 1, NOW())
+      ON CONFLICT (ip_address, window_date) WHERE user_id IS NULL
+      DO UPDATE SET
+        contact_count = rate_limits.contact_count + 1,
+        updated_at = NOW()
+      RETURNING contact_count
+    `
+    const count = rows[0].contact_count
+    if (count > limit) return { allowed: false, limit, resetAt: midnight() }
+    return { allowed: true }
+  } catch (err) {
+    console.error('[contact] rate limit failed:', err.message)
+    return { allowed: true }
+  }
+}

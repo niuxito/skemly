@@ -407,7 +407,7 @@ export default function AdminPage() {
       <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="text-center">
           <p className="text-sm text-slate-600 mb-2">Acceso restringido a administradores.</p>
-          <a href="/" className="text-xs text-slate-400 hover:underline">Volver al inicio</a>
+          <a href="/app" className="text-xs text-slate-400 hover:underline">Volver al inicio</a>
         </div>
       </div>
     )
@@ -417,7 +417,7 @@ export default function AdminPage() {
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <a href="/" className="font-bold text-slate-800 text-sm hover:text-slate-600">Skemly</a>
+          <a href="/app" className="font-bold text-slate-800 text-sm hover:text-slate-600">Skemly</a>
           <span className="text-slate-300">/</span>
           <span className="text-sm text-slate-600 font-medium">Admin</span>
         </div>

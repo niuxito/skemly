@@ -174,6 +174,23 @@ function adminPlugin() {
   }
 }
 
+// The case study landing is index.html at "/"; every other page path is the
+// editor SPA (app.html), as the catch-all rewrite in vercel.json does in production.
+function spaFallbackPlugin() {
+  return {
+    name: 'spa-fallback',
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const path = req.url.split('?')[0]
+        const isPage = path !== '/' && !path.startsWith('/api/') && !path.startsWith('/@') &&
+          !path.startsWith('/src/') && !path.startsWith('/node_modules/') && !path.includes('.')
+        if (isPage) req.url = '/app.html'
+        next()
+      })
+    },
+  }
+}
+
 function anthropicProxyPlugin(apiKey, databaseUrl, dailyLimit, fileDailyLimit, fileMaxSize, models) {
   return {
     name: 'anthropic-proxy',
@@ -348,7 +365,13 @@ export default defineConfig(({ mode, command }) => {
   process.env.APP_URL               = process.env.APP_URL               ?? env.APP_URL
 
   return {
+    build: {
+      rollupOptions: {
+        input: { main: 'index.html', app: 'app.html' },
+      },
+    },
     plugins: [
+      spaFallbackPlugin(),
       react(),
       tailwindcss(),
       authPlugin(),

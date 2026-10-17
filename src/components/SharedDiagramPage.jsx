@@ -51,7 +51,7 @@ export default function SharedDiagramPage() {
       dsl: diagramData.dsl,
       title: diagramData.title,
     }))
-    window.location.href = '/'
+    window.location.href = '/app'
   }
 
   if (loading) {
@@ -70,7 +70,7 @@ export default function SharedDiagramPage() {
         <button
           onClick={() => {
             sessionStorage.setItem('skemly_new_session', '1')
-            window.location.href = '/'
+            window.location.href = '/app'
           }}
           className="px-4 py-2 bg-slate-800 text-white rounded text-sm hover:bg-slate-700 transition-colors"
         >
@@ -104,7 +104,7 @@ export default function SharedDiagramPage() {
           <button
             onClick={() => {
               sessionStorage.setItem('skemly_new_session', '1')
-              window.location.href = '/'
+              window.location.href = '/app'
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium bg-slate-800 text-white hover:bg-slate-700 transition-colors"
           >

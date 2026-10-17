@@ -13,6 +13,7 @@ import {
   checkFileRateLimitByUser,
   incrementFileCountByUser,
   checkEnhanceEligibility,
+  checkAndIncrementContact,
 } from './_rateLimit.js'
 import { buildAnthropicBody, validateMessages } from './_buildAnthropicBody.js'
 import { detectInjection } from './_promptGuard.js'
@@ -22,6 +23,7 @@ import { resolveUserFeatures } from './_plans.js'
 import { isBillingEnabled, effectivePlan } from './_billing.js'
 import { neon } from '@neondatabase/serverless'
 import { handleEnhancePrompt } from './_enhancePrompt.js'
+import { handleContact } from './_contact.js'
 
 const FILE_MAX_SIZE = parseInt(process.env.FILE_MAX_SIZE_ANON ?? String(2 * 1024 * 1024), 10)
 
@@ -63,6 +65,10 @@ export default async function handler(req, res) {
   })()
   if (opFromQuery === 'enhance' || req.body?.op === 'enhance') {
     return handleEnhancePrompt(req, res, { apiKey, ip, checkEnhanceEligibility, getUserFromRequest, resolveUserFeatures, detectInjection, neon })
+  }
+  // Landing page contact form (Telegram notification), same reason
+  if (opFromQuery === 'contact') {
+    return handleContact(req, res, { ip, checkAndIncrementContact })
   }
 
   // ─── Auth + plan resolution ───────────────────────────────────────────────

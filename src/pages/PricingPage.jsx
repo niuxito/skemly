@@ -57,7 +57,7 @@ export default function PricingPage() {
 
   // No plans on instances without Stripe
   useEffect(() => {
-    if (billingEnabled === false) window.location.replace('/')
+    if (billingEnabled === false) window.location.replace('/app')
   }, [billingEnabled])
 
   // Read query params on mount
@@ -112,7 +112,7 @@ export default function PricingPage() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <a href="/" className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
+          <a href="/app" className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
             <ArrowLeft size={13} />
             Volver al editor
           </a>
@@ -216,7 +216,7 @@ export default function PricingPage() {
                     </button>
                   ) : (
                     <a
-                      href="/"
+                      href="/app"
                       className="block w-full py-2 rounded-lg text-sm font-medium text-center bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors"
                     >
                       {plan.cta}

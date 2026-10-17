@@ -6,7 +6,7 @@ export default function TermsPage() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-3 bg-white border-b border-slate-200">
         <div className="flex items-center gap-3">
-          <a href="/" className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
+          <a href="/app" className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 transition-colors">
             <ArrowLeft size={13} />
             Volver al editor
           </a>
@@ -274,7 +274,7 @@ export default function TermsPage() {
           <div className="flex items-center gap-4">
             <a href="/terms" className="hover:text-slate-700 transition-colors font-medium text-slate-700">Términos de Servicio</a>
             <a href="/privacy" className="hover:text-slate-700 transition-colors">Política de Privacidad</a>
-            <a href="/" className="hover:text-slate-700 transition-colors">Volver al editor</a>
+            <a href="/app" className="hover:text-slate-700 transition-colors">Volver al editor</a>
           </div>
         </div>
       </footer>
